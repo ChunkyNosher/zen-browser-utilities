@@ -34,6 +34,7 @@ import {
     pasteTabUrls: 'zen-browser-utilities-paste-tab-urls',
     pasteTabUrlsCsv: 'zen-browser-utilities-paste-tab-urls-csv',
     closeStaleTabs: 'zen-browser-utilities-close-stale-tabs',
+    replacePinnedUrlWithCurrent: 'zen-browser-utilities-replace-pinned-url-with-current',
   };
 
   const PROMPT_TITLES = {
@@ -146,6 +147,11 @@ import {
 
   function getCurrentSelectionIds() {
     return getContextTabs().map(tab => tab.getAttribute('id'));
+  }
+
+  function getSelectionIdsWithFallback(contextTab = getContextTab()) {
+    const selectedIds = getCurrentSelectionIds();
+    return selectedIds.length ? selectedIds : [contextTab?.getAttribute('id')].filter(Boolean);
   }
 
   function delay(ms) {
@@ -314,16 +320,16 @@ import {
     }
 
     const orderedTabs = getSiblingTabs(contextTab);
-    const selectedIds = getCurrentSelectionIds();
+    const selectedIds = getSelectionIdsWithFallback(contextTab);
     const tabsToClose =
       direction === 'above'
         ? getItemsBeforeSelection(
             orderedTabs,
-            selectedIds.length ? selectedIds : [contextTab.getAttribute('id')]
+            selectedIds
           )
         : getItemsAfterSelection(
             orderedTabs,
-            selectedIds.length ? selectedIds : [contextTab.getAttribute('id')]
+            selectedIds
           );
 
     if (!tabsToClose.length) {
@@ -502,10 +508,17 @@ import {
   }
 
   function cloneTabIntoWorkspace(tab, workspace) {
-    const state =
-      typeof SessionStore?.getTabState === 'function'
-        ? JSON.parse(SessionStore.getTabState(tab))
-        : null;
+    let state = null;
+
+    if (typeof SessionStore?.getTabState === 'function') {
+      try {
+        const stateString = SessionStore.getTabState(tab);
+        state = stateString ? JSON.parse(stateString) : null;
+      } catch (error) {
+        logError(error);
+      }
+    }
+
     const userContextId =
       typeof workspace?.containerTabId === 'number' ? workspace.containerTabId : 0;
 
@@ -517,16 +530,17 @@ import {
 
     if (state) {
       state.userContextId = userContextId;
-      SessionStore.setTabState(newTab, state);
+      SessionStore.setTabState(newTab, JSON.stringify(state));
     } else {
       const currentUri = tab?.linkedBrowser?.currentURI?.spec || 'about:blank';
-      gBrowser.loadOneTab(currentUri, {
-        inBackground: !tab.selected,
-        userContextId,
+      const browserForNewTab =
+        typeof gBrowser.getBrowserForTab === 'function'
+          ? gBrowser.getBrowserForTab(newTab)
+          : newTab.linkedBrowser;
+
+      browserForNewTab?.loadURI?.(currentUri, {
         triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
       });
-      gBrowser.removeTab(newTab);
-      return null;
     }
 
     if (tab.pinned) {
@@ -557,14 +571,18 @@ import {
     }
 
     let lastCreatedTab = null;
+    const createdTabs = [];
 
     for (const tab of sourceTabs) {
       const newTab = cloneTabIntoWorkspace(tab, destination);
 
-      if (newTab) {
-        lastCreatedTab = newTab;
+      if (!newTab) {
+        removeTabs(createdTabs);
+        return false;
       }
 
+      createdTabs.push(newTab);
+      lastCreatedTab = newTab;
     }
 
     await closeTabsInConfiguredBatches(sourceTabs);
@@ -594,6 +612,27 @@ import {
 
   function getSelectedPinnedTabs() {
     return getContextTabs().filter(tab => tab?.pinned);
+  }
+
+  function getCurrentTabUrl() {
+    return gBrowser?.selectedTab?.linkedBrowser?.currentURI?.spec || '';
+  }
+
+  function replacePinnedUrlWithCurrent() {
+    const currentUrl = getCurrentTabUrl();
+    const targetTabs = getSelectedPinnedTabs();
+
+    if (!currentUrl || !targetTabs.length) {
+      return false;
+    }
+
+    for (const tab of targetTabs) {
+      tab.linkedBrowser?.loadURI?.(currentUrl, {
+        triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+      });
+    }
+
+    return true;
   }
 
   function duplicatePinnedTabBelow() {
@@ -773,6 +812,7 @@ import {
     pasteTabUrls: () => pasteTabUrls(),
     pasteTabUrlsCsv: () => pasteTabUrlsCsv(),
     closeStaleTabs: () => closeStaleTabsNow(),
+    replacePinnedUrlWithCurrent: () => replacePinnedUrlWithCurrent(),
   };
 
   async function executeAction(actionId) {
@@ -882,14 +922,14 @@ import {
     }
 
     const orderedTabs = getSiblingTabs(contextTab);
-    const selectedIds = getCurrentSelectionIds();
+    const selectedIds = getSelectionIdsWithFallback(contextTab);
     const aboveTabs = getItemsBeforeSelection(
       orderedTabs,
-      selectedIds.length ? selectedIds : [contextTab.getAttribute('id')]
+      selectedIds
     );
     const belowTabs = getItemsAfterSelection(
       orderedTabs,
-      selectedIds.length ? selectedIds : [contextTab.getAttribute('id')]
+      selectedIds
     );
 
     document.getElementById(MENU_IDS.closeTabsAbove).hidden = !aboveTabs.length;
@@ -899,6 +939,8 @@ import {
       !getSelectedPinnedTabs().length ||
       getSelectedPinnedTabs().length !== getContextTabs().length;
     document.getElementById(MENU_IDS.closeStaleTabs).hidden = !collectStaleTabs().length;
+    document.getElementById(MENU_IDS.replacePinnedUrlWithCurrent).hidden =
+      !getCurrentTabUrl() || !getSelectedPinnedTabs().length;
 
     buildFolderMenu();
     buildWorkspaceMenu();
@@ -931,6 +973,7 @@ import {
       </menu>
       <menuitem id="${MENU_IDS.moveOutOfFolder}" label="Move Out of Folder" />
       <menuitem id="${MENU_IDS.duplicatePinnedBelow}" label="Duplicate Pinned Tab Below" />
+      <menuitem id="${MENU_IDS.replacePinnedUrlWithCurrent}" label="Replace Pinned URL with Current" />
       <menuitem id="${MENU_IDS.closeStaleTabs}" label="Close Stale Tabs Now" />
       <menu id="${MENU_IDS.moveToWorkspace}" label="Move to Space Container">
         <menupopup id="${MENU_IDS.moveToWorkspacePopup}" />
@@ -978,6 +1021,9 @@ import {
     document
       .getElementById(MENU_IDS.duplicatePinnedBelow)
       .addEventListener('command', () => executeAction('duplicatePinnedBelow'));
+    document
+      .getElementById(MENU_IDS.replacePinnedUrlWithCurrent)
+      .addEventListener('command', () => executeAction('replacePinnedUrlWithCurrent'));
     document
       .getElementById(MENU_IDS.closeStaleTabs)
       .addEventListener('command', () => executeAction('closeStaleTabs'));

@@ -50,4 +50,17 @@ describe('shortcut-utils', () => {
       })
     ).toBe('');
   });
+
+  test('supports the plus key without delimiter ambiguity', () => {
+    expect(normalizeShortcut('ctrl+plus')).toBe('Control+Plus');
+    expect(
+      eventToShortcut({
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        key: '+',
+      })
+    ).toBe('Control+Plus');
+  });
 });

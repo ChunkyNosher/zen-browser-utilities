@@ -64,6 +64,11 @@ export const ACTIONS = [
     label: 'Close Stale Tabs',
     prefKey: 'zen-browser-utilities.shortcuts.closeStaleTabs',
   },
+  {
+    id: 'replacePinnedUrlWithCurrent',
+    label: 'Replace Pinned URL with Current',
+    prefKey: 'zen-browser-utilities.shortcuts.replacePinnedUrlWithCurrent',
+  },
 ];
 
 export const ACTIONS_BY_ID = new Map(ACTIONS.map(action => [action.id, action]));

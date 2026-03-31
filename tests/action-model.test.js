@@ -15,6 +15,20 @@ describe('action-model', () => {
     ).toEqual(['b', 'd']);
   });
 
+  test('matches object and node-like items by id', () => {
+    const nodeA = {
+      getAttribute(name) {
+        return name === 'id' ? 'a' : '';
+      },
+    };
+    const nodeB = { id: 'b' };
+
+    expect(getOrderedSelectionIds([nodeA, nodeB], ['b', 'a'])).toEqual([
+      nodeA,
+      nodeB,
+    ]);
+  });
+
   test('returns items before the selected block', () => {
     expect(getItemsBeforeSelection(['a', 'b', 'c', 'd'], ['b', 'c'])).toEqual([
       'a',

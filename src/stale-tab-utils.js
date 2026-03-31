@@ -1,9 +1,15 @@
 export function isTabAudible(tab) {
-  return Boolean(
-    tab?.soundPlaying ||
-      tab?.hasAttribute?.('soundplaying') ||
-      tab?.linkedBrowser?.audioMuted === false
-  );
+  const isPlaying = tab?.soundPlaying || tab?.hasAttribute?.('soundplaying');
+
+  if (!isPlaying) {
+    return false;
+  }
+
+  if (tab?.linkedBrowser && 'audioMuted' in tab.linkedBrowser) {
+    return tab.linkedBrowser.audioMuted === false;
+  }
+
+  return Boolean(isPlaying);
 }
 
 export function shouldAutoCloseTab(

@@ -91,6 +91,13 @@
     "placeholder": "Alt+Shift+X"
   },
   {
+    "property": "zen-browser-utilities.shortcuts.replacePinnedUrlWithCurrent",
+    "label": "Shortcut: Replace pinned URL with Current",
+    "type": "string",
+    "defaultValue": "",
+    "placeholder": "Alt+Shift+R"
+  },
+  {
     "property": "zen-browser-utilities.close.batchSize",
     "label": "Bulk close batch size (recommended 10-30)",
     "type": "string",

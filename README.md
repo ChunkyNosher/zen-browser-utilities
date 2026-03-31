@@ -14,6 +14,7 @@ This mod currently adds native-tab-menu integrations and optional keyboard short
 - Move the current tab selection into another folder
 - Move the current tab selection out of the current folder
 - Duplicate a pinned tab directly below the original pinned tab
+- Replace pinned URL with Current
 - Re-open the current tab selection inside another Zen space using that space's assigned Firefox container
 - Copy all selected tab links as newline-delimited URLs
 - Paste newline-delimited links as tabs

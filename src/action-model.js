@@ -1,6 +1,24 @@
+function getItemId(item) {
+  if (typeof item === 'string') {
+    return item;
+  }
+
+  if (item && typeof item === 'object') {
+    if (typeof item.id === 'string') {
+      return item.id;
+    }
+
+    if (typeof item.getAttribute === 'function') {
+      return item.getAttribute('id');
+    }
+  }
+
+  return '';
+}
+
 export function getOrderedSelectionIds(items, selectedIds) {
   const selected = new Set(selectedIds);
-  return items.filter(item => selected.has(item));
+  return items.filter(item => selected.has(getItemId(item)));
 }
 
 export function getItemsBeforeSelection(items, selectedIds) {

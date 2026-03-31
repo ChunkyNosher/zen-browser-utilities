@@ -22,7 +22,8 @@ const KEY_ALIASES = new Map([
   ['right', 'ArrowRight'],
   ['up', 'ArrowUp'],
   ['down', 'ArrowDown'],
-  ['plus', '+'],
+  ['+', 'Plus'],
+  ['plus', 'Plus'],
 ]);
 
 const MODIFIER_KEYS = new Set(['Control', 'Meta', 'Alt', 'Shift']);

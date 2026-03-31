@@ -68,4 +68,21 @@ describe('stale-tab-utils', () => {
       })
     ).toHaveLength(1);
   });
+
+  test('treats silent unmuted tabs as not audible', () => {
+    expect(
+      shouldAutoCloseTab(
+        createMockTab({
+          linkedBrowser: {
+            audioMuted: false,
+          },
+        }),
+        {
+          now: 10_000,
+          maxAgeMs: 5_000,
+          ignoreAudible: true,
+        }
+      )
+    ).toBe(true);
+  });
 });
