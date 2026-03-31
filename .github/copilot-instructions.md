@@ -1,0 +1,2 @@
+- Copilot should scan through the README, the Zen Browser repo, and the Sine repo for a full understanding of the proper architecture of this mod.
+- At the end of each Copilot run, it is required to re-run `vp build` or whatever current dev build command in this repo is configured so that updates are pushed to the compiled file.

@@ -1,0 +1,41 @@
+{
+  "name": "zen-browser-utilities",
+  "version": "0.2.0",
+  "description": "Zen Browser mod that allows you to assign shortcuts to various right-click context menu actions that aren't able to be assigned to keyboard shortcuts. Will also include other utilities in the future.",
+  "main": "zen-browser-utilities.uc.js",
+  "scripts": {
+    "build": "vp build && node -e \"require('node:fs').copyFileSync('dist/zen-browser-utilities.uc.js','zen-browser-utilities.uc.js')\"",
+    "test": "vp test",
+    "lint": "vp lint",
+    "check": "vp check",
+    "format": "vp fmt"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChunkyNosher/zen-browser-utilities.git"
+  },
+  "keywords": [
+    "zen-browser",
+    "sine",
+    "tabs",
+    "folders",
+    "workspaces",
+    "shortcuts"
+  ],
+  "author": "ChunkyNosher",
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/ChunkyNosher/zen-browser-utilities/issues"
+  },
+  "homepage": "https://github.com/ChunkyNosher/zen-browser-utilities#readme",
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.1.15",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.15"
+  },
+  "devDependencies": {
+    "@voidzero-dev/vite-plus-core": "^0.1.15",
+    "vite-plus": "^0.1.15",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.15"
+  }
+}
