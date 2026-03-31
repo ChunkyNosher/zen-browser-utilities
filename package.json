@@ -1,0 +1,38 @@
+{
+  "name": "zen-browser-utilities",
+  "version": "0.1.0",
+  "description": "Zen Browser mod that allows you to assign shortcuts to various right-click context menu actions that aren't able to be assigned to keyboard shortcuts. Will also include other utilities in the future.",
+  "main": "zen-browser-utilities.uc.js",
+  "scripts": {
+    "build": "rollup -c rollup.config.mjs",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChunkyNosher/zen-browser-utilities.git"
+  },
+  "keywords": [
+    "zen-browser",
+    "sine",
+    "tabs",
+    "folders",
+    "workspaces",
+    "shortcuts"
+  ],
+  "author": "ChunkyNosher",
+  "license": "MIT",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/ChunkyNosher/zen-browser-utilities/issues"
+  },
+  "homepage": "https://github.com/ChunkyNosher/zen-browser-utilities#readme",
+  "devDependencies": {
+    "@eslint/js": "^8.56.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.0",
+    "rollup": "^4.59.0",
+    "vitest": "^4.0.18"
+  }
+}

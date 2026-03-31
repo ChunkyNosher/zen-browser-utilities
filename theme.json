@@ -1,0 +1,33 @@
+{
+  "id": "zen-browser-utilities",
+  "name": "Zen Browser Utilities",
+  "description": "Adds assignable keyboard shortcuts and native tab context menu actions for Zen Browser tab, folder, and workspace operations.",
+  "homepage": "https://github.com/ChunkyNosher/zen-browser-utilities",
+  "author": "ChunkyNosher",
+  "version": "0.1.0",
+  "tags": [
+    "sine",
+    "zen-browser",
+    "fx-autoconfig",
+    "JavaScript",
+    "tabs",
+    "shortcuts",
+    "folders",
+    "workspaces"
+  ],
+  "createdAt": "2026-03-31",
+  "updatedAt": "2026-03-31",
+  "js": "https://raw.githubusercontent.com/ChunkyNosher/zen-browser-utilities/main/zen-browser-utilities.uc.js",
+  "scripts": {
+    "zen-browser-utilities.uc.js": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    }
+  },
+  "preferences": "https://raw.githubusercontent.com/ChunkyNosher/zen-browser-utilities/main/preferences.json",
+  "readme": "https://raw.githubusercontent.com/ChunkyNosher/zen-browser-utilities/main/README.md",
+  "fork": [
+    "zen"
+  ]
+}
