@@ -44,6 +44,26 @@ export const ACTIONS = [
     label: 'Move to Space Container…',
     prefKey: 'zen-browser-utilities.shortcuts.moveToWorkspacePrompt',
   },
+  {
+    id: 'copySelectedTabUrls',
+    label: 'Copy Selected Tab Links',
+    prefKey: 'zen-browser-utilities.shortcuts.copySelectedTabUrls',
+  },
+  {
+    id: 'pasteTabUrls',
+    label: 'Paste Links as Tabs',
+    prefKey: 'zen-browser-utilities.shortcuts.pasteTabUrls',
+  },
+  {
+    id: 'pasteTabUrlsCsv',
+    label: 'Paste CSV Links as Tabs',
+    prefKey: 'zen-browser-utilities.shortcuts.pasteTabUrlsCsv',
+  },
+  {
+    id: 'closeStaleTabs',
+    label: 'Close Stale Tabs',
+    prefKey: 'zen-browser-utilities.shortcuts.closeStaleTabs',
+  },
 ];
 
 export const ACTIONS_BY_ID = new Map(ACTIONS.map(action => [action.id, action]));

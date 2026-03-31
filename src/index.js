@@ -1,4 +1,4 @@
-/* global Services, SessionStore, TabContextMenu, gBrowser, gZenFolders, gZenWorkspaces, MozXULElement, ContextualIdentityService */
+/* global Services, SessionStore, TabContextMenu, gBrowser, gZenFolders, gZenWorkspaces, MozXULElement, ContextualIdentityService, Cc, Ci */
 
 import {
   buildFolderChoices,
@@ -8,7 +8,13 @@ import {
   getOrderedSelectionIds,
 } from './action-model.js';
 import { ACTIONS_BY_ID } from './action-definitions.js';
+import { chunkItems, parsePositiveInteger } from './batch-utils.js';
 import { shortcutMatchesEvent } from './shortcut-utils.js';
+import { getStaleTabs } from './stale-tab-utils.js';
+import {
+  extractUrlsFromCsvText,
+  parseLineSeparatedUrls,
+} from './url-utils.js';
 
 (() => {
   const MENU_IDS = {
@@ -24,24 +30,79 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
     duplicatePinnedBelow: 'zen-browser-utilities-duplicate-pinned-below',
     moveToWorkspace: 'zen-browser-utilities-move-to-workspace',
     moveToWorkspacePopup: 'zen-browser-utilities-move-to-workspace-popup',
+    copySelectedTabUrls: 'zen-browser-utilities-copy-selected-tab-urls',
+    pasteTabUrls: 'zen-browser-utilities-paste-tab-urls',
+    pasteTabUrlsCsv: 'zen-browser-utilities-paste-tab-urls-csv',
+    closeStaleTabs: 'zen-browser-utilities-close-stale-tabs',
   };
 
   const PROMPT_TITLES = {
     folder: 'Move tab to folder',
     workspace: 'Move tab to space',
   };
+  const DEFAULT_BATCH_SIZE = 20;
+  const DEFAULT_BATCH_DELAY_MS = 120;
+  const DEFAULT_STALE_MAX_AGE_MINUTES = 10080;
+  const DEFAULT_STALE_CHECK_INTERVAL_MINUTES = 15;
+  const STALE_MONITOR_INTERVAL_MS = 60_000;
+  let lastStaleSweepAt = 0;
 
   function logError(error) {
     console.error('Zen Browser Utilities:', error);
   }
 
-  function getPref(prefKey) {
+  function getStringPref(prefKey) {
     try {
       return Services.prefs.getStringPref(prefKey, '').trim();
     } catch (error) {
       logError(error);
       return '';
     }
+  }
+
+  function getBoolPref(prefKey, fallback = false) {
+    try {
+      return Services.prefs.getBoolPref(prefKey, fallback);
+    } catch (error) {
+      logError(error);
+      return fallback;
+    }
+  }
+
+  function getConfiguredBatchSize() {
+    return parsePositiveInteger(
+      getStringPref('zen-browser-utilities.close.batchSize'),
+      DEFAULT_BATCH_SIZE,
+      { min: 1, max: 30 }
+    );
+  }
+
+  function getConfiguredBatchDelayMs() {
+    return parsePositiveInteger(
+      getStringPref('zen-browser-utilities.close.batchDelayMs'),
+      DEFAULT_BATCH_DELAY_MS,
+      { min: 0, max: 10_000 }
+    );
+  }
+
+  function getConfiguredStaleMaxAgeMs() {
+    return (
+      parsePositiveInteger(
+        getStringPref('zen-browser-utilities.stale.maxAgeMinutes'),
+        DEFAULT_STALE_MAX_AGE_MINUTES,
+        { min: 10, max: 525_600 }
+      ) * 60_000
+    );
+  }
+
+  function getConfiguredStaleCheckIntervalMs() {
+    return (
+      parsePositiveInteger(
+        getStringPref('zen-browser-utilities.stale.checkIntervalMinutes'),
+        DEFAULT_STALE_CHECK_INTERVAL_MINUTES,
+        { min: 1, max: 1_440 }
+      ) * 60_000
+    );
   }
 
   function getContextTab() {
@@ -60,6 +121,10 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
     }
 
     return [contextTab];
+  }
+
+  function getSelectedTabsIfPossible() {
+    return gBrowser?.selectedTabs?.length ? gBrowser.selectedTabs : getContextTabs();
   }
 
   function isTabNode(node) {
@@ -81,6 +146,121 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
 
   function getCurrentSelectionIds() {
     return getContextTabs().map(tab => tab.getAttribute('id'));
+  }
+
+  function delay(ms) {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+  }
+
+  function getClipboardHelper() {
+    try {
+      return Cc['@mozilla.org/widget/clipboardhelper;1'].getService(
+        Ci.nsIClipboardHelper
+      );
+    } catch (error) {
+      logError(error);
+      return null;
+    }
+  }
+
+  async function writeClipboardText(text) {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (error) {
+      logError(error);
+    }
+
+    const helper = getClipboardHelper();
+
+    if (helper) {
+      helper.copyString(text);
+      return true;
+    }
+
+    return false;
+  }
+
+  async function readClipboardText(promptTitle, promptText) {
+    try {
+      if (navigator?.clipboard?.readText) {
+        return await navigator.clipboard.readText();
+      }
+    } catch (error) {
+      logError(error);
+    }
+
+    const value = { value: '' };
+    const accepted = Services.prompt.prompt(
+      window,
+      promptTitle,
+      promptText,
+      value,
+      null,
+      {}
+    );
+
+    return accepted ? value.value : '';
+  }
+
+  function normalizeUrlForOpen(rawUrl) {
+    const trimmed = rawUrl.trim();
+
+    if (!trimmed) {
+      return '';
+    }
+
+    try {
+      const flags =
+        Ci.nsIURIFixup.FIXUP_FLAG_FIX_SCHEME_TYPOS |
+        Ci.nsIURIFixup.FIXUP_FLAG_ALLOW_KEYWORD_LOOKUP;
+      return Services.uriFixup.getFixupURIInfo(trimmed, flags)?.fixedURI?.spec || trimmed;
+    } catch (error) {
+      logError(error);
+      return trimmed;
+    }
+  }
+
+  function removeTabs(tabs) {
+    const removableTabs = tabs.filter(tab => tab && !tab.closing);
+
+    if (!removableTabs.length) {
+      return false;
+    }
+
+    if (typeof gBrowser.removeTabs === 'function' && removableTabs.length > 1) {
+      gBrowser.removeTabs(removableTabs, { animate: true });
+      return true;
+    }
+
+    for (const tab of removableTabs) {
+      gBrowser.removeTab(tab, { animate: true });
+    }
+
+    return true;
+  }
+
+  async function closeTabsInConfiguredBatches(tabs) {
+    const removableTabs = tabs.filter(tab => tab && !tab.closing);
+
+    if (!removableTabs.length) {
+      return false;
+    }
+
+    const batches = chunkItems(removableTabs, getConfiguredBatchSize());
+    const batchDelayMs = getConfiguredBatchDelayMs();
+
+    for (let index = 0; index < batches.length; index += 1) {
+      removeTabs(batches[index]);
+
+      if (index < batches.length - 1 && batchDelayMs > 0) {
+        await delay(batchDelayMs);
+      }
+    }
+
+    return true;
   }
 
   function moveNode(node, parent, beforeNode = null) {
@@ -126,7 +306,7 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
     return true;
   }
 
-  function closeRelativeTabs(direction) {
+  async function closeRelativeTabs(direction) {
     const contextTab = getContextTab();
 
     if (!contextTab) {
@@ -150,16 +330,7 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
       return false;
     }
 
-    if (typeof gBrowser.removeTabs === 'function') {
-      gBrowser.removeTabs(tabsToClose, { animate: true });
-      return true;
-    }
-
-    for (const tab of tabsToClose) {
-      gBrowser.removeTab(tab, { animate: true });
-    }
-
-    return true;
+    return closeTabsInConfiguredBatches(tabsToClose);
   }
 
   function createNewFolderFromSelection() {
@@ -394,8 +565,9 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
         lastCreatedTab = newTab;
       }
 
-      gBrowser.removeTab(tab, { animate: true });
     }
+
+    await closeTabsInConfiguredBatches(sourceTabs);
 
     if (lastCreatedTab) {
       await gZenWorkspaces?.changeWorkspaceWithID?.(destination.uuid);
@@ -420,43 +592,171 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
     return moveTabsToWorkspaceWithContainer(workspaces[index].id);
   }
 
-  function duplicatePinnedTabBelow() {
-    const originalTab = getContextTab();
+  function getSelectedPinnedTabs() {
+    return getContextTabs().filter(tab => tab?.pinned);
+  }
 
-    if (!originalTab?.pinned) {
+  function duplicatePinnedTabBelow() {
+    const originalTabs = getSelectedPinnedTabs();
+
+    if (!originalTabs.length || originalTabs.length !== getContextTabs().length) {
       return false;
     }
 
-    const duplicatedTab = gBrowser.duplicateTab(originalTab, true);
-    let finalized = false;
+    for (const originalTab of originalTabs) {
+      const duplicatedTab = gBrowser.duplicateTab(originalTab, true);
+      let finalized = false;
 
-    const finalizeDuplicate = () => {
-      if (finalized || !duplicatedTab?.isConnected) {
-        return;
-      }
+      const finalizeDuplicate = () => {
+        if (finalized || !duplicatedTab?.isConnected) {
+          return;
+        }
 
-      finalized = true;
+        finalized = true;
 
-      if (!duplicatedTab.pinned) {
-        gBrowser.pinTab(duplicatedTab);
-      }
+        if (!duplicatedTab.pinned) {
+          gBrowser.pinTab(duplicatedTab);
+        }
 
-      const parent = originalTab.parentElement;
-      const beforeNode = originalTab.nextElementSibling;
-      moveNode(duplicatedTab, parent, beforeNode);
+        const parent = originalTab.parentElement;
+        const beforeNode = originalTab.nextElementSibling;
+        moveNode(duplicatedTab, parent, beforeNode);
 
-      const workspaceId = getWorkspaceIdForNode(originalTab);
-      if (workspaceId) {
-        duplicatedTab.setAttribute('zen-workspace-id', workspaceId);
-      }
-    };
+        const workspaceId = getWorkspaceIdForNode(originalTab);
+        if (workspaceId) {
+          duplicatedTab.setAttribute('zen-workspace-id', workspaceId);
+        }
+      };
 
-    duplicatedTab.addEventListener('SSTabRestored', finalizeDuplicate, {
-      once: true,
-    });
+      duplicatedTab.addEventListener('SSTabRestored', finalizeDuplicate, {
+        once: true,
+      });
 
-    setTimeout(finalizeDuplicate, 500);
+      setTimeout(finalizeDuplicate, 500);
+    }
+
     return true;
+  }
+
+  function getTabUrls(tabs) {
+    return tabs
+      .map(tab => tab?.linkedBrowser?.currentURI?.spec || '')
+      .filter(Boolean);
+  }
+
+  async function copySelectedTabUrls() {
+    const urls = getTabUrls(getSelectedTabsIfPossible());
+
+    if (!urls.length) {
+      return false;
+    }
+
+    return writeClipboardText(urls.join('\n'));
+  }
+
+  function getDestinationWorkspace() {
+    const workspaceId = getWorkspaceIdForNode(getContextTab());
+    return (gZenWorkspaces?.getWorkspaces?.() || []).find(
+      workspace => workspace.uuid === workspaceId
+    );
+  }
+
+  function createTabsInCurrentContext(urls) {
+    const destinationFolder = getCurrentFolder();
+    const destinationWorkspace = getDestinationWorkspace();
+    const createdTabs = [];
+
+    for (const url of urls) {
+      const fixedUrl = normalizeUrlForOpen(url);
+
+      if (!fixedUrl) {
+        continue;
+      }
+
+      const newTab = gBrowser.addTrustedTab(fixedUrl, {
+        inBackground: true,
+        userContextId:
+          typeof destinationWorkspace?.containerTabId === 'number'
+            ? destinationWorkspace.containerTabId
+            : 0,
+        triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+      });
+
+      if (destinationWorkspace?.uuid) {
+        gZenWorkspaces?.moveTabToWorkspace?.(newTab, destinationWorkspace.uuid);
+      }
+
+      createdTabs.push(newTab);
+    }
+
+    if (destinationFolder && createdTabs.length) {
+      if (destinationFolder.pinned) {
+        for (const tab of createdTabs) {
+          if (!tab.pinned) {
+            gBrowser.pinTab(tab);
+          }
+        }
+      }
+
+      destinationFolder.addTabs(createdTabs);
+    }
+
+    if (createdTabs.length) {
+      gBrowser.selectedTab = createdTabs[createdTabs.length - 1];
+    }
+
+    return createdTabs.length > 0;
+  }
+
+  async function pasteTabUrls() {
+    const clipboardText = await readClipboardText(
+      'Paste links as tabs',
+      'Paste newline-delimited links to open each one in a new tab.'
+    );
+
+    return createTabsInCurrentContext(parseLineSeparatedUrls(clipboardText));
+  }
+
+  async function pasteTabUrlsCsv() {
+    const clipboardText = await readClipboardText(
+      'Paste CSV links as tabs',
+      'Paste CSV text and every URL-like cell will open in a new tab.'
+    );
+
+    return createTabsInCurrentContext(extractUrlsFromCsvText(clipboardText));
+  }
+
+  function collectStaleTabs() {
+    return getStaleTabs(Array.from(gBrowser.tabs || []), {
+      now: Date.now(),
+      maxAgeMs: getConfiguredStaleMaxAgeMs(),
+      ignoreAudible: getBoolPref('zen-browser-utilities.stale.ignoreAudible', true),
+    });
+  }
+
+  async function closeStaleTabsNow() {
+    const staleTabs = collectStaleTabs();
+
+    if (!staleTabs.length) {
+      return false;
+    }
+
+    return closeTabsInConfiguredBatches(staleTabs);
+  }
+
+  async function maybeRunStaleTabsSweep() {
+    if (!getBoolPref('zen-browser-utilities.stale.autoCloseEnabled', false)) {
+      return false;
+    }
+
+    const now = Date.now();
+
+    if (now - lastStaleSweepAt < getConfiguredStaleCheckIntervalMs()) {
+      return false;
+    }
+
+    lastStaleSweepAt = now;
+    return closeStaleTabsNow();
   }
 
   const ACTION_HANDLERS = {
@@ -469,9 +769,13 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
     moveOutOfFolder: () => moveTabsOutOfFolder(),
     duplicatePinnedBelow: () => duplicatePinnedTabBelow(),
     moveToWorkspacePrompt: () => promptMoveTabsToWorkspace(),
+    copySelectedTabUrls: () => copySelectedTabUrls(),
+    pasteTabUrls: () => pasteTabUrls(),
+    pasteTabUrlsCsv: () => pasteTabUrlsCsv(),
+    closeStaleTabs: () => closeStaleTabsNow(),
   };
 
-  function executeAction(actionId) {
+  async function executeAction(actionId) {
     const action = ACTIONS_BY_ID.get(actionId);
     const handler = ACTION_HANDLERS[actionId];
 
@@ -480,7 +784,7 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
     }
 
     try {
-      return handler();
+      return await handler();
     } catch (error) {
       logError(error);
       return false;
@@ -509,7 +813,7 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
     }
 
     for (const action of ACTIONS_BY_ID.values()) {
-      const shortcut = getPref(action.prefKey);
+      const shortcut = getStringPref(action.prefKey);
 
       if (!shortcutMatchesEvent(shortcut, event)) {
         continue;
@@ -591,7 +895,10 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
     document.getElementById(MENU_IDS.closeTabsAbove).hidden = !aboveTabs.length;
     document.getElementById(MENU_IDS.closeTabsBelow).hidden = !belowTabs.length;
     document.getElementById(MENU_IDS.moveOutOfFolder).hidden = !getCurrentFolder(contextTab);
-    document.getElementById(MENU_IDS.duplicatePinnedBelow).hidden = !contextTab.pinned;
+    document.getElementById(MENU_IDS.duplicatePinnedBelow).hidden =
+      !getSelectedPinnedTabs().length ||
+      getSelectedPinnedTabs().length !== getContextTabs().length;
+    document.getElementById(MENU_IDS.closeStaleTabs).hidden = !collectStaleTabs().length;
 
     buildFolderMenu();
     buildWorkspaceMenu();
@@ -616,11 +923,15 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
       <menuitem id="${MENU_IDS.createNewFolder}" label="Create New Folder" />
       <menuitem id="${MENU_IDS.closeTabsAbove}" label="Close Tabs Above" />
       <menuitem id="${MENU_IDS.closeTabsBelow}" label="Close Tabs Below" />
+      <menuitem id="${MENU_IDS.copySelectedTabUrls}" label="Copy Selected Tab Links" />
+      <menuitem id="${MENU_IDS.pasteTabUrls}" label="Paste Links as Tabs" />
+      <menuitem id="${MENU_IDS.pasteTabUrlsCsv}" label="Paste CSV Links as Tabs" />
       <menu id="${MENU_IDS.moveToFolder}" label="Move to Folder">
         <menupopup id="${MENU_IDS.moveToFolderPopup}" />
       </menu>
       <menuitem id="${MENU_IDS.moveOutOfFolder}" label="Move Out of Folder" />
       <menuitem id="${MENU_IDS.duplicatePinnedBelow}" label="Duplicate Pinned Tab Below" />
+      <menuitem id="${MENU_IDS.closeStaleTabs}" label="Close Stale Tabs Now" />
       <menu id="${MENU_IDS.moveToWorkspace}" label="Move to Space Container">
         <menupopup id="${MENU_IDS.moveToWorkspacePopup}" />
       </menu>
@@ -653,11 +964,23 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
       .getElementById(MENU_IDS.closeTabsBelow)
       .addEventListener('command', () => executeAction('closeTabsBelow'));
     document
+      .getElementById(MENU_IDS.copySelectedTabUrls)
+      .addEventListener('command', () => executeAction('copySelectedTabUrls'));
+    document
+      .getElementById(MENU_IDS.pasteTabUrls)
+      .addEventListener('command', () => executeAction('pasteTabUrls'));
+    document
+      .getElementById(MENU_IDS.pasteTabUrlsCsv)
+      .addEventListener('command', () => executeAction('pasteTabUrlsCsv'));
+    document
       .getElementById(MENU_IDS.moveOutOfFolder)
       .addEventListener('command', () => executeAction('moveOutOfFolder'));
     document
       .getElementById(MENU_IDS.duplicatePinnedBelow)
       .addEventListener('command', () => executeAction('duplicatePinnedBelow'));
+    document
+      .getElementById(MENU_IDS.closeStaleTabs)
+      .addEventListener('command', () => executeAction('closeStaleTabs'));
     tabContextMenu.addEventListener('popupshowing', event => {
       if (event.target?.id !== 'tabContextMenu') {
         return;
@@ -670,6 +993,9 @@ import { shortcutMatchesEvent } from './shortcut-utils.js';
   function init() {
     window.addEventListener('keydown', onKeyDown, true);
     installContextMenu();
+    window.setInterval(() => {
+      void maybeRunStaleTabsSweep();
+    }, STALE_MONITOR_INTERVAL_MS);
   }
 
   if (document.readyState === 'loading') {

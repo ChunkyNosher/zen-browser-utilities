@@ -4,7 +4,7 @@
   "description": "Adds assignable keyboard shortcuts and native tab context menu actions for Zen Browser tab, folder, and workspace operations.",
   "homepage": "https://github.com/ChunkyNosher/zen-browser-utilities",
   "author": "ChunkyNosher",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "tags": [
     "sine",
     "zen-browser",
