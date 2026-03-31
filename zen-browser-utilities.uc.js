@@ -7,9 +7,17 @@
 */
 (function() {
 	//#region src/action-model.js
+	function getItemId(item) {
+		if (typeof item === "string") return item;
+		if (item && typeof item === "object") {
+			if (typeof item.id === "string") return item.id;
+			if (typeof item.getAttribute === "function") return item.getAttribute("id");
+		}
+		return "";
+	}
 	function getOrderedSelectionIds(items, selectedIds) {
 		const selected = new Set(selectedIds);
-		return items.filter((item) => selected.has(item));
+		return items.filter((item) => selected.has(getItemId(item)));
 	}
 	function getItemsBeforeSelection(items, selectedIds) {
 		const orderedSelection = getOrderedSelectionIds(items, selectedIds);
@@ -100,6 +108,11 @@
 			id: "closeStaleTabs",
 			label: "Close Stale Tabs",
 			prefKey: "zen-browser-utilities.shortcuts.closeStaleTabs"
+		},
+		{
+			id: "replacePinnedUrlWithCurrent",
+			label: "Replace Pinned URL with Current",
+			prefKey: "zen-browser-utilities.shortcuts.replacePinnedUrlWithCurrent"
 		}
 	].map((action) => [action.id, action]));
 	//#endregion
@@ -145,7 +158,8 @@
 		["right", "ArrowRight"],
 		["up", "ArrowUp"],
 		["down", "ArrowDown"],
-		["plus", "+"]
+		["+", "Plus"],
+		["plus", "Plus"]
 	]);
 	var MODIFIER_KEYS = new Set([
 		"Control",
@@ -189,7 +203,10 @@
 	//#endregion
 	//#region src/stale-tab-utils.js
 	function isTabAudible(tab) {
-		return Boolean(tab?.soundPlaying || tab?.hasAttribute?.("soundplaying") || tab?.linkedBrowser?.audioMuted === false);
+		const isPlaying = tab?.soundPlaying || tab?.hasAttribute?.("soundplaying");
+		if (!isPlaying) return false;
+		if (tab?.linkedBrowser && "audioMuted" in tab.linkedBrowser) return tab.linkedBrowser.audioMuted === false;
+		return Boolean(isPlaying);
 	}
 	function shouldAutoCloseTab(tab, { now, maxAgeMs, ignoreAudible = true } = {}) {
 		if (!tab || !Number.isFinite(now) || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0) return false;
@@ -270,7 +287,8 @@
 			copySelectedTabUrls: "zen-browser-utilities-copy-selected-tab-urls",
 			pasteTabUrls: "zen-browser-utilities-paste-tab-urls",
 			pasteTabUrlsCsv: "zen-browser-utilities-paste-tab-urls-csv",
-			closeStaleTabs: "zen-browser-utilities-close-stale-tabs"
+			closeStaleTabs: "zen-browser-utilities-close-stale-tabs",
+			replacePinnedUrlWithCurrent: "zen-browser-utilities-replace-pinned-url-with-current"
 		};
 		const PROMPT_TITLES = {
 			folder: "Move tab to folder",
@@ -347,6 +365,10 @@
 		}
 		function getCurrentSelectionIds() {
 			return getContextTabs().map((tab) => tab.getAttribute("id"));
+		}
+		function getSelectionIdsWithFallback(contextTab = getContextTab()) {
+			const selectedIds = getCurrentSelectionIds();
+			return selectedIds.length ? selectedIds : [contextTab?.getAttribute("id")].filter(Boolean);
 		}
 		function delay(ms) {
 			return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -444,8 +466,8 @@
 			const contextTab = getContextTab();
 			if (!contextTab) return false;
 			const orderedTabs = getSiblingTabs(contextTab);
-			const selectedIds = getCurrentSelectionIds();
-			const tabsToClose = direction === "above" ? getItemsBeforeSelection(orderedTabs, selectedIds.length ? selectedIds : [contextTab.getAttribute("id")]) : getItemsAfterSelection(orderedTabs, selectedIds.length ? selectedIds : [contextTab.getAttribute("id")]);
+			const selectedIds = getSelectionIdsWithFallback(contextTab);
+			const tabsToClose = direction === "above" ? getItemsBeforeSelection(orderedTabs, selectedIds) : getItemsAfterSelection(orderedTabs, selectedIds);
 			if (!tabsToClose.length) return false;
 			return closeTabsInConfiguredBatches(tabsToClose);
 		}
@@ -531,7 +553,13 @@
 			}));
 		}
 		function cloneTabIntoWorkspace(tab, workspace) {
-			const state = typeof SessionStore?.getTabState === "function" ? JSON.parse(SessionStore.getTabState(tab)) : null;
+			let state = null;
+			if (typeof SessionStore?.getTabState === "function") try {
+				const stateString = SessionStore.getTabState(tab);
+				state = stateString ? JSON.parse(stateString) : null;
+			} catch (error) {
+				logError(error);
+			}
 			const userContextId = typeof workspace?.containerTabId === "number" ? workspace.containerTabId : 0;
 			const newTab = gBrowser.addTrustedTab("about:blank", {
 				inBackground: !tab.selected,
@@ -540,16 +568,10 @@
 			});
 			if (state) {
 				state.userContextId = userContextId;
-				SessionStore.setTabState(newTab, state);
+				SessionStore.setTabState(newTab, JSON.stringify(state));
 			} else {
 				const currentUri = tab?.linkedBrowser?.currentURI?.spec || "about:blank";
-				gBrowser.loadOneTab(currentUri, {
-					inBackground: !tab.selected,
-					userContextId,
-					triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()
-				});
-				gBrowser.removeTab(newTab);
-				return null;
+				(typeof gBrowser.getBrowserForTab === "function" ? gBrowser.getBrowserForTab(newTab) : newTab.linkedBrowser)?.loadURI?.(currentUri, { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
 			}
 			if (tab.pinned) gBrowser.pinTab(newTab);
 			if (tab.hasAttribute("zen-workspace-id")) newTab.setAttribute("zen-workspace-id", workspace.uuid);
@@ -562,9 +584,15 @@
 			const sourceTabs = getContextTabs();
 			if (!sourceTabs.length) return false;
 			let lastCreatedTab = null;
+			const createdTabs = [];
 			for (const tab of sourceTabs) {
 				const newTab = cloneTabIntoWorkspace(tab, destination);
-				if (newTab) lastCreatedTab = newTab;
+				if (!newTab) {
+					removeTabs(createdTabs);
+					return false;
+				}
+				createdTabs.push(newTab);
+				lastCreatedTab = newTab;
 			}
 			await closeTabsInConfiguredBatches(sourceTabs);
 			if (lastCreatedTab) {
@@ -581,6 +609,16 @@
 		}
 		function getSelectedPinnedTabs() {
 			return getContextTabs().filter((tab) => tab?.pinned);
+		}
+		function getCurrentTabUrl() {
+			return gBrowser?.selectedTab?.linkedBrowser?.currentURI?.spec || "";
+		}
+		function replacePinnedUrlWithCurrent() {
+			const currentUrl = getCurrentTabUrl();
+			const targetTabs = getSelectedPinnedTabs();
+			if (!currentUrl || !targetTabs.length) return false;
+			for (const tab of targetTabs) tab.linkedBrowser?.loadURI?.(currentUrl, { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
+			return true;
 		}
 		function duplicatePinnedTabBelow() {
 			const originalTabs = getSelectedPinnedTabs();
@@ -677,7 +715,8 @@
 			copySelectedTabUrls: () => copySelectedTabUrls(),
 			pasteTabUrls: () => pasteTabUrls(),
 			pasteTabUrlsCsv: () => pasteTabUrlsCsv(),
-			closeStaleTabs: () => closeStaleTabsNow()
+			closeStaleTabs: () => closeStaleTabsNow(),
+			replacePinnedUrlWithCurrent: () => replacePinnedUrlWithCurrent()
 		};
 		async function executeAction(actionId) {
 			const action = ACTIONS_BY_ID.get(actionId);
@@ -746,14 +785,15 @@
 			const contextTab = getContextTab();
 			if (!contextTab) return;
 			const orderedTabs = getSiblingTabs(contextTab);
-			const selectedIds = getCurrentSelectionIds();
-			const aboveTabs = getItemsBeforeSelection(orderedTabs, selectedIds.length ? selectedIds : [contextTab.getAttribute("id")]);
-			const belowTabs = getItemsAfterSelection(orderedTabs, selectedIds.length ? selectedIds : [contextTab.getAttribute("id")]);
+			const selectedIds = getSelectionIdsWithFallback(contextTab);
+			const aboveTabs = getItemsBeforeSelection(orderedTabs, selectedIds);
+			const belowTabs = getItemsAfterSelection(orderedTabs, selectedIds);
 			document.getElementById(MENU_IDS.closeTabsAbove).hidden = !aboveTabs.length;
 			document.getElementById(MENU_IDS.closeTabsBelow).hidden = !belowTabs.length;
 			document.getElementById(MENU_IDS.moveOutOfFolder).hidden = !getCurrentFolder(contextTab);
 			document.getElementById(MENU_IDS.duplicatePinnedBelow).hidden = !getSelectedPinnedTabs().length || getSelectedPinnedTabs().length !== getContextTabs().length;
 			document.getElementById(MENU_IDS.closeStaleTabs).hidden = !collectStaleTabs().length;
+			document.getElementById(MENU_IDS.replacePinnedUrlWithCurrent).hidden = !getCurrentTabUrl() || !getSelectedPinnedTabs().length;
 			buildFolderMenu();
 			buildWorkspaceMenu();
 		}
@@ -779,6 +819,7 @@
       </menu>
       <menuitem id="${MENU_IDS.moveOutOfFolder}" label="Move Out of Folder" />
       <menuitem id="${MENU_IDS.duplicatePinnedBelow}" label="Duplicate Pinned Tab Below" />
+      <menuitem id="${MENU_IDS.replacePinnedUrlWithCurrent}" label="Replace Pinned URL with Current" />
       <menuitem id="${MENU_IDS.closeStaleTabs}" label="Close Stale Tabs Now" />
       <menu id="${MENU_IDS.moveToWorkspace}" label="Move to Space Container">
         <menupopup id="${MENU_IDS.moveToWorkspacePopup}" />
@@ -797,6 +838,7 @@
 			document.getElementById(MENU_IDS.pasteTabUrlsCsv).addEventListener("command", () => executeAction("pasteTabUrlsCsv"));
 			document.getElementById(MENU_IDS.moveOutOfFolder).addEventListener("command", () => executeAction("moveOutOfFolder"));
 			document.getElementById(MENU_IDS.duplicatePinnedBelow).addEventListener("command", () => executeAction("duplicatePinnedBelow"));
+			document.getElementById(MENU_IDS.replacePinnedUrlWithCurrent).addEventListener("command", () => executeAction("replacePinnedUrlWithCurrent"));
 			document.getElementById(MENU_IDS.closeStaleTabs).addEventListener("command", () => executeAction("closeStaleTabs"));
 			tabContextMenu.addEventListener("popupshowing", (event) => {
 				if (event.target?.id !== "tabContextMenu") return;

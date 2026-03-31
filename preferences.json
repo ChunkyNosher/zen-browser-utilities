@@ -92,7 +92,7 @@
   },
   {
     "property": "zen-browser-utilities.shortcuts.replacePinnedUrlWithCurrent",
-    "label": "Shortcut: Replace pinned URL with Current",
+    "label": "Shortcut: Replace pinned URL with current",
     "type": "string",
     "defaultValue": "",
     "placeholder": "Alt+Shift+R"
