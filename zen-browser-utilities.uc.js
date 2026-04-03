@@ -275,11 +275,22 @@
 			meta: false,
 			accel: false
 		};
-		for (const part of parts.slice(0, -1)) if (part === "Control") if (isMac) modifiers.control = true;
-		else modifiers.accel = true;
-		else if (part === "Meta") modifiers.meta = true;
-		else if (part === "Alt") modifiers.alt = true;
-		else if (part === "Shift") modifiers.shift = true;
+		for (const part of parts.slice(0, -1)) switch (part) {
+			case "Control":
+				if (isMac) modifiers.control = true;
+				else modifiers.accel = true;
+				break;
+			case "Meta":
+				modifiers.meta = true;
+				break;
+			case "Alt":
+				modifiers.alt = true;
+				break;
+			case "Shift":
+				modifiers.shift = true;
+				break;
+			default: break;
+		}
 		if (key === "Plus") return {
 			key: "+",
 			keycode: "",

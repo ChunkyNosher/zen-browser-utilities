@@ -1325,7 +1325,7 @@ import {
       childList: true,
       subtree: true,
     });
-    void rerender();
+    rerender();
     window.addEventListener('unload', () => {
       shortcutEditorObserver?.disconnect();
       shortcutEditorObserver = null;
