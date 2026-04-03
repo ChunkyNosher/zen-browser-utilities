@@ -28,7 +28,7 @@ const KEY_ALIASES = new Map([
 ]);
 
 const MODIFIER_KEYS = new Set(['Control', 'Meta', 'Alt', 'Shift']);
-const SPECIAL_KEYCODES = new Map([
+export const SPECIAL_KEYCODES = new Map([
   ['Backspace', 'VK_BACK'],
   ['Delete', 'VK_DELETE'],
   ['End', 'VK_END'],
@@ -198,4 +198,8 @@ export function parseShortcutBinding(shortcut, {
     keycode: '',
     modifiers,
   };
+}
+
+export function getSpecialKeycode(key) {
+  return SPECIAL_KEYCODES.get(normalizeToken(key));
 }

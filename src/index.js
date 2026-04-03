@@ -9,7 +9,11 @@ import {
 } from './action-model.js';
 import { ACTIONS, ACTIONS_BY_ID } from './action-definitions.js';
 import { chunkItems, parsePositiveInteger } from './batch-utils.js';
-import { parseShortcutBinding, shortcutMatchesEvent } from './shortcut-utils.js';
+import {
+  getSpecialKeycode,
+  parseShortcutBinding,
+  shortcutMatchesEvent,
+} from './shortcut-utils.js';
 import { getStaleTabs } from './stale-tab-utils.js';
 import {
   extractUrlsFromCsvText,
@@ -72,46 +76,6 @@ import {
     MENU_IDS.closeStaleTabs,
     MENU_IDS.moveToWorkspace,
   ];
-  const SPECIAL_KEYCODES = new Map([
-    ['ARROWDOWN', 'VK_DOWN'],
-    ['ARROWLEFT', 'VK_LEFT'],
-    ['ARROWRIGHT', 'VK_RIGHT'],
-    ['ARROWUP', 'VK_UP'],
-    ['BACKSPACE', 'VK_BACK'],
-    ['DELETE', 'VK_DELETE'],
-    ['END', 'VK_END'],
-    ['ENTER', 'VK_RETURN'],
-    ['ESCAPE', 'VK_ESCAPE'],
-    ['F1', 'VK_F1'],
-    ['F2', 'VK_F2'],
-    ['F3', 'VK_F3'],
-    ['F4', 'VK_F4'],
-    ['F5', 'VK_F5'],
-    ['F6', 'VK_F6'],
-    ['F7', 'VK_F7'],
-    ['F8', 'VK_F8'],
-    ['F9', 'VK_F9'],
-    ['F10', 'VK_F10'],
-    ['F11', 'VK_F11'],
-    ['F12', 'VK_F12'],
-    ['F13', 'VK_F13'],
-    ['F14', 'VK_F14'],
-    ['F15', 'VK_F15'],
-    ['F16', 'VK_F16'],
-    ['F17', 'VK_F17'],
-    ['F18', 'VK_F18'],
-    ['F19', 'VK_F19'],
-    ['F20', 'VK_F20'],
-    ['F21', 'VK_F21'],
-    ['F22', 'VK_F22'],
-    ['F23', 'VK_F23'],
-    ['F24', 'VK_F24'],
-    ['HOME', 'VK_HOME'],
-    ['PAGEDOWN', 'VK_PAGE_DOWN'],
-    ['PAGEUP', 'VK_PAGE_UP'],
-    ['SPACE', 'VK_SPACE'],
-    ['TAB', 'VK_TAB'],
-  ]);
   const KEYCODE_DISPLAY_NAMES = new Map([
     ['VK_BACK', 'Backspace'],
     ['VK_DELETE', 'Delete'],
@@ -992,7 +956,7 @@ import {
     }
 
     setNewBinding(shortcut) {
-      const specialKeycode = SPECIAL_KEYCODES.get(shortcut.toUpperCase());
+      const specialKeycode = getSpecialKeycode(shortcut);
 
       if (specialKeycode) {
         this.keycode = specialKeycode;
@@ -1166,7 +1130,7 @@ import {
       const command = document.createXULElement('command');
       command.id = action.commandId;
       command.addEventListener('command', () => {
-        void executeAction(action.id);
+        return executeAction(action.id);
       });
       commandset.appendChild(command);
     }
