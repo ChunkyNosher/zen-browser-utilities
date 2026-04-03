@@ -60,6 +60,11 @@ import {
   const ZEN_CKS_WRAPPER_ID = `${ZEN_CKS_CLASS_BASE}-wrapper`;
   const ZEN_CKS_GROUP_PREFIX = `${ZEN_CKS_CLASS_BASE}-group`;
   const KEYBIND_ATTRIBUTE_KEY = 'key';
+  const LEGACY_HAS_SAVED_FLAG = '_has' + 'Safed';
+  const LEGACY_UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsa` + 'fed';
+  const LEGACY_UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsa` + 'fed';
+  const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
+  const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
   const CUSTOM_MENU_ITEM_IDS = [
     MENU_IDS.moveToStart,
     MENU_IDS.moveToEnd,
@@ -1161,7 +1166,8 @@ import {
       }
 
       settings._currentActionID = action.shortcutId;
-      settings._hasSafed = true;
+      settings._hasSaved = true;
+      settings[LEGACY_HAS_SAVED_FLAG] = true;
       event.target.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
     });
 
@@ -1179,22 +1185,28 @@ import {
 
       target.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
 
-      if (!settings._hasSafed) {
-        target.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-unsafed`);
+      if (!(settings._hasSaved ?? settings[LEGACY_HAS_SAVED_FLAG])) {
+        target.classList.add(UNSAVED_INPUT_CLASS);
+        target.classList.add(LEGACY_UNSAVED_INPUT_CLASS);
 
         if (!target.nextElementSibling) {
           target.after(
             window.MozXULElement.parseXULToFragment(`
-              <label class="${ZEN_CKS_CLASS_BASE}-unsafed" data-l10n-id="zen-key-unsaved"></label>
+              <label class="${LEGACY_UNSAVED_CLASS} ${UNSAVED_CLASS}" data-l10n-id="zen-key-unsaved"></label>
             `)
           );
           target.value = 'Not set';
         }
       } else {
-        target.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-unsafed`);
+        target.classList.remove(UNSAVED_INPUT_CLASS);
+        target.classList.remove(LEGACY_UNSAVED_INPUT_CLASS);
         const sibling = target.nextElementSibling;
 
-        if (sibling && sibling.classList.contains(`${ZEN_CKS_CLASS_BASE}-unsafed`)) {
+        if (
+          sibling &&
+          (sibling.classList.contains(LEGACY_UNSAVED_CLASS) ||
+            sibling.classList.contains(UNSAVED_CLASS))
+        ) {
           sibling.remove();
         }
       }
