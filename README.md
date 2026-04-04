@@ -93,4 +93,4 @@ zen-browser-utilities.uc.js
 - Folder and workspace destination actions are available in the native tab context menu, and the keyboard-triggered versions use a picker prompt so they remain assignable without inventing a separate context UI.
 - Bulk close operations use a configurable batch size and delay so closing hundreds of tabs does not try to remove them all at once.
 - Automatic stale-tab cleanup only targets unpinned inactive tabs and skips selected, multiselected, essential, busy, pending, and optionally audible tabs.
-- `preferences.json` now keeps only non-shortcut settings, including a toggle for showing or hiding this mod's custom tab-context-menu entries.
+- `preferences.json` now keeps only non-shortcut settings, including per-action toggles for which custom tab-context-menu entries should appear.

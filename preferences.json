@@ -1,7 +1,85 @@
 [
   {
-    "property": "zen-browser-utilities.contextMenu.enabled",
-    "label": "Show this mod's custom actions in the tab right-click context menu",
+    "property": "zen-browser-utilities.contextMenu.moveToStart",
+    "label": "Show “Move to Start” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.moveToEnd",
+    "label": "Show “Move to End” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.createNewFolder",
+    "label": "Show “Create New Folder” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.closeTabsAbove",
+    "label": "Show “Close Tabs Above” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.closeTabsBelow",
+    "label": "Show “Close Tabs Below” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.moveToFolder",
+    "label": "Show “Move to Folder” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.moveOutOfFolder",
+    "label": "Show “Move Out of Folder” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.duplicatePinnedBelow",
+    "label": "Show “Duplicate Pinned Tab Below” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.moveToWorkspace",
+    "label": "Show “Move to Space Container” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.copySelectedTabUrls",
+    "label": "Show “Copy Selected Tab Links” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.pasteTabUrls",
+    "label": "Show “Paste Links as Tabs” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.pasteTabUrlsCsv",
+    "label": "Show “Paste CSV Links as Tabs” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.closeStaleTabs",
+    "label": "Show “Close Stale Tabs Now” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.contextMenu.replacePinnedUrlWithCurrent",
+    "label": "Show “Replace Pinned URL with Current” in the tab right-click context menu",
     "type": "checkbox",
     "defaultValue": true
   },

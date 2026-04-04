@@ -50,7 +50,6 @@ import {
   const DEFAULT_STALE_MAX_AGE_MINUTES = 10080;
   const DEFAULT_STALE_CHECK_INTERVAL_MINUTES = 15;
   const STALE_MONITOR_INTERVAL_MS = 60_000;
-  const CONTEXT_MENU_ENABLED_PREF = 'zen-browser-utilities.contextMenu.enabled';
   const BROWSER_URL = 'chrome://browser/content/browser.xhtml';
   const CUSTOM_COMMANDSET_ID = 'zen-browser-utilities-commandset';
   const CUSTOM_SHORTCUT_ROW_ATTRIBUTE = 'data-zen-browser-utilities-shortcut';
@@ -60,27 +59,11 @@ import {
   const ZEN_CKS_WRAPPER_ID = `${ZEN_CKS_CLASS_BASE}-wrapper`;
   const ZEN_CKS_GROUP_PREFIX = `${ZEN_CKS_CLASS_BASE}-group`;
   const KEYBIND_ATTRIBUTE_KEY = 'key';
-  const LEGACY_HAS_SAVED_FLAG = '_has' + 'Safed';
-  const LEGACY_UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsa` + 'fed';
-  const LEGACY_UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsa` + 'fed';
   const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
   const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
-  const CUSTOM_MENU_ITEM_IDS = [
-    MENU_IDS.moveToStart,
-    MENU_IDS.moveToEnd,
-    MENU_IDS.createNewFolder,
-    MENU_IDS.closeTabsAbove,
-    MENU_IDS.closeTabsBelow,
-    MENU_IDS.copySelectedTabUrls,
-    MENU_IDS.pasteTabUrls,
-    MENU_IDS.pasteTabUrlsCsv,
-    MENU_IDS.moveToFolder,
-    MENU_IDS.moveOutOfFolder,
-    MENU_IDS.duplicatePinnedBelow,
-    MENU_IDS.replacePinnedUrlWithCurrent,
-    MENU_IDS.closeStaleTabs,
-    MENU_IDS.moveToWorkspace,
-  ];
+  const CONTEXT_MENU_ACTIONS = ACTIONS.filter(
+    action => action.contextMenuPrefKey && action.contextMenuMenuId
+  );
   const KEYCODE_DISPLAY_NAMES = new Map([
     ['VK_BACK', 'Backspace'],
     ['VK_DELETE', 'Delete'],
@@ -167,6 +150,32 @@ import {
     } catch (error) {
       logError(error);
       return null;
+    }
+  }
+
+  function getShortcutEditorSavedState(settings) {
+    return Boolean(settings?._hasSaved);
+  }
+
+  function setShortcutEditorSavedState(settings, value) {
+    if (settings) {
+      settings._hasSaved = value;
+    }
+  }
+
+  function getContextMenuElement(action) {
+    return document.getElementById(MENU_IDS[action.contextMenuMenuId]) || null;
+  }
+
+  function isContextMenuActionEnabled(action) {
+    return getBoolPref(action.contextMenuPrefKey, true);
+  }
+
+  function setContextMenuActionHidden(action, hidden) {
+    const element = getContextMenuElement(action);
+
+    if (element) {
+      element.hidden = hidden || !isContextMenuActionEnabled(action);
     }
   }
 
@@ -1157,6 +1166,25 @@ import {
     input.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-not-set`);
   }
 
+  function createUnsavedShortcutNotice() {
+    return window.MozXULElement.parseXULToFragment(`
+      <label class="${UNSAVED_CLASS}" data-l10n-id="zen-key-unsaved"></label>
+    `);
+  }
+
+  function createShortcutEditorRow() {
+    const fragment = window.MozXULElement.parseXULToFragment(`
+      <hbox class="${ZEN_CKS_CLASS_BASE}" ${CUSTOM_SHORTCUT_ROW_ATTRIBUTE}="true">
+        <label class="${ZEN_CKS_LABEL_CLASS}" />
+        <vbox flex="1">
+          <html:input readonly="1" class="${ZEN_CKS_INPUT_FIELD_CLASS}" />
+        </vbox>
+      </hbox>
+    `);
+
+    return fragment.firstElementChild;
+  }
+
   function attachShortcutInputEvents(input, action) {
     input.addEventListener('focus', event => {
       const settings = window.gZenCKSSettings;
@@ -1166,13 +1194,12 @@ import {
       }
 
       settings._currentActionID = action.shortcutId;
-      settings._hasSaved = true;
-      settings[LEGACY_HAS_SAVED_FLAG] = true;
+      setShortcutEditorSavedState(settings, true);
       event.target.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
     });
 
     input.addEventListener('editDone', event => {
-      event.target.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
+      event.target.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
     });
 
     input.addEventListener('blur', event => {
@@ -1185,28 +1212,18 @@ import {
 
       target.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
 
-      if (!(settings._hasSaved ?? settings[LEGACY_HAS_SAVED_FLAG])) {
+      if (!getShortcutEditorSavedState(settings)) {
         target.classList.add(UNSAVED_INPUT_CLASS);
-        target.classList.add(LEGACY_UNSAVED_INPUT_CLASS);
 
         if (!target.nextElementSibling) {
-          target.after(
-            window.MozXULElement.parseXULToFragment(`
-              <label class="${LEGACY_UNSAVED_CLASS} ${UNSAVED_CLASS}" data-l10n-id="zen-key-unsaved"></label>
-            `)
-          );
+          target.after(createUnsavedShortcutNotice());
           target.value = 'Not set';
         }
       } else {
         target.classList.remove(UNSAVED_INPUT_CLASS);
-        target.classList.remove(LEGACY_UNSAVED_INPUT_CLASS);
         const sibling = target.nextElementSibling;
 
-        if (
-          sibling &&
-          (sibling.classList.contains(LEGACY_UNSAVED_CLASS) ||
-            sibling.classList.contains(UNSAVED_CLASS))
-        ) {
+        if (sibling && sibling.classList.contains(UNSAVED_CLASS)) {
           sibling.remove();
         }
       }
@@ -1250,15 +1267,7 @@ import {
 
     for (const action of ACTIONS) {
       const shortcut = getCustomShortcutFromManager(action);
-      const fragment = window.MozXULElement.parseXULToFragment(`
-        <hbox class="${ZEN_CKS_CLASS_BASE}" ${CUSTOM_SHORTCUT_ROW_ATTRIBUTE}="true">
-          <label class="${ZEN_CKS_LABEL_CLASS}" />
-          <vbox flex="1">
-            <html:input readonly="1" class="${ZEN_CKS_INPUT_FIELD_CLASS}" />
-          </vbox>
-        </hbox>
-      `);
-      const row = fragment.firstElementChild;
+      const row = createShortcutEditorRow();
       const label = row.querySelector(`.${ZEN_CKS_LABEL_CLASS}`);
       const input = row.querySelector(`.${ZEN_CKS_INPUT_FIELD_CLASS}`);
 
@@ -1308,6 +1317,19 @@ import {
         return Boolean(settings);
       }
 
+      if (!Object.getOwnPropertyDescriptor(settings, '_hasSaved')) {
+        Object.defineProperty(settings, '_hasSaved', {
+          configurable: true,
+          enumerable: false,
+          get() {
+            return this['_has' + 'Safed'];
+          },
+          set(value) {
+            this['_has' + 'Safed'] = value;
+          },
+        });
+      }
+
       const originalInitializeCKS = settings._initializeCKS.bind(settings);
       settings._initializeCKS = async (...args) => {
         await originalInitializeCKS(...args);
@@ -1351,17 +1373,17 @@ import {
       return;
     }
 
-    const visibleCustomItems = CUSTOM_MENU_ITEM_IDS.some(id => {
-      const element = document.getElementById(id);
+    const visibleCustomItems = CONTEXT_MENU_ACTIONS.some(action => {
+      const element = getContextMenuElement(action);
       return element && !element.hidden;
     });
 
-    separator.hidden = !getBoolPref(CONTEXT_MENU_ENABLED_PREF, true) || !visibleCustomItems;
+    separator.hidden = !visibleCustomItems;
   }
 
   function hideAllCustomContextMenuItems() {
-    for (const id of CUSTOM_MENU_ITEM_IDS) {
-      const element = document.getElementById(id);
+    for (const action of CONTEXT_MENU_ACTIONS) {
+      const element = getContextMenuElement(action);
 
       if (element) {
         element.hidden = true;
@@ -1448,11 +1470,11 @@ import {
   }
 
   function buildFolderMenu() {
-    const folderMenu = document.getElementById(MENU_IDS.moveToFolder);
+    const folderAction = ACTIONS_BY_ID.get('moveToFolderPrompt');
     const folders = getAvailableFolders();
 
     clearPopupChildren(MENU_IDS.moveToFolderPopup);
-    folderMenu.hidden = !folders.length;
+    setContextMenuActionHidden(folderAction, !folders.length);
 
     const popup = document.getElementById(MENU_IDS.moveToFolderPopup);
 
@@ -1468,11 +1490,11 @@ import {
   }
 
   function buildWorkspaceMenu() {
-    const workspaceMenu = document.getElementById(MENU_IDS.moveToWorkspace);
+    const workspaceAction = ACTIONS_BY_ID.get('moveToWorkspacePrompt');
     const workspaces = getAvailableWorkspaces();
 
     clearPopupChildren(MENU_IDS.moveToWorkspacePopup);
-    workspaceMenu.hidden = workspaces.length < 1;
+    setContextMenuActionHidden(workspaceAction, workspaces.length < 1);
 
     const popup = document.getElementById(MENU_IDS.moveToWorkspacePopup);
 
@@ -1495,11 +1517,6 @@ import {
       return;
     }
 
-    if (!getBoolPref(CONTEXT_MENU_ENABLED_PREF, true)) {
-      hideAllCustomContextMenuItems();
-      return;
-    }
-
     const orderedTabs = getSiblingTabs(contextTab);
     const selectedIds = getSelectionIdsWithFallback(contextTab);
     const aboveTabs = getItemsBeforeSelection(
@@ -1511,15 +1528,40 @@ import {
       selectedIds
     );
 
-    document.getElementById(MENU_IDS.closeTabsAbove).hidden = !aboveTabs.length;
-    document.getElementById(MENU_IDS.closeTabsBelow).hidden = !belowTabs.length;
-    document.getElementById(MENU_IDS.moveOutOfFolder).hidden = !getCurrentFolder(contextTab);
-    document.getElementById(MENU_IDS.duplicatePinnedBelow).hidden =
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('moveToStart'), false);
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('moveToEnd'), false);
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('createNewFolder'), false);
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('closeTabsAbove'), !aboveTabs.length);
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('closeTabsBelow'), !belowTabs.length);
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('copySelectedTabUrls'),
+      false
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('pasteTabUrls'),
+      false
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('pasteTabUrlsCsv'),
+      false
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('moveOutOfFolder'),
+      !getCurrentFolder(contextTab)
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('duplicatePinnedBelow'),
       !getSelectedPinnedTabs().length ||
-      getSelectedPinnedTabs().length !== getContextTabs().length;
-    document.getElementById(MENU_IDS.closeStaleTabs).hidden = !collectStaleTabs().length;
-    document.getElementById(MENU_IDS.replacePinnedUrlWithCurrent).hidden =
-      !getCurrentTabUrl() || !getSelectedPinnedTabs().length;
+      getSelectedPinnedTabs().length !== getContextTabs().length
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('closeStaleTabs'),
+      !collectStaleTabs().length
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('replacePinnedUrlWithCurrent'),
+      !getCurrentTabUrl() || !getSelectedPinnedTabs().length
+    );
 
     buildFolderMenu();
     buildWorkspaceMenu();

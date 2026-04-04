@@ -52,7 +52,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.moveToStart",
 			shortcutId: "zen-browser-utilities-shortcut-move-to-start",
 			commandId: "zen-browser-utilities-command-move-to-start",
-			shortcutGroup: "windowAndTabManagement"
+			shortcutGroup: "windowAndTabManagement",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.moveToStart",
+			contextMenuLabel: "Show “Move to Start” in the tab right-click context menu",
+			contextMenuMenuId: "moveToStart"
 		},
 		{
 			id: "moveToEnd",
@@ -60,7 +63,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.moveToEnd",
 			shortcutId: "zen-browser-utilities-shortcut-move-to-end",
 			commandId: "zen-browser-utilities-command-move-to-end",
-			shortcutGroup: "windowAndTabManagement"
+			shortcutGroup: "windowAndTabManagement",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.moveToEnd",
+			contextMenuLabel: "Show “Move to End” in the tab right-click context menu",
+			contextMenuMenuId: "moveToEnd"
 		},
 		{
 			id: "createNewFolder",
@@ -68,7 +74,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.createNewFolder",
 			shortcutId: "zen-browser-utilities-shortcut-create-new-folder",
 			commandId: "zen-browser-utilities-command-create-new-folder",
-			shortcutGroup: "windowAndTabManagement"
+			shortcutGroup: "windowAndTabManagement",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.createNewFolder",
+			contextMenuLabel: "Show “Create New Folder” in the tab right-click context menu",
+			contextMenuMenuId: "createNewFolder"
 		},
 		{
 			id: "closeTabsAbove",
@@ -76,7 +85,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.closeTabsAbove",
 			shortcutId: "zen-browser-utilities-shortcut-close-tabs-above",
 			commandId: "zen-browser-utilities-command-close-tabs-above",
-			shortcutGroup: "windowAndTabManagement"
+			shortcutGroup: "windowAndTabManagement",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.closeTabsAbove",
+			contextMenuLabel: "Show “Close Tabs Above” in the tab right-click context menu",
+			contextMenuMenuId: "closeTabsAbove"
 		},
 		{
 			id: "closeTabsBelow",
@@ -84,7 +96,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.closeTabsBelow",
 			shortcutId: "zen-browser-utilities-shortcut-close-tabs-below",
 			commandId: "zen-browser-utilities-command-close-tabs-below",
-			shortcutGroup: "windowAndTabManagement"
+			shortcutGroup: "windowAndTabManagement",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.closeTabsBelow",
+			contextMenuLabel: "Show “Close Tabs Below” in the tab right-click context menu",
+			contextMenuMenuId: "closeTabsBelow"
 		},
 		{
 			id: "moveToFolderPrompt",
@@ -92,7 +107,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.moveToFolderPrompt",
 			shortcutId: "zen-browser-utilities-shortcut-move-to-folder",
 			commandId: "zen-browser-utilities-command-move-to-folder",
-			shortcutGroup: "windowAndTabManagement"
+			shortcutGroup: "windowAndTabManagement",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.moveToFolder",
+			contextMenuLabel: "Show “Move to Folder” in the tab right-click context menu",
+			contextMenuMenuId: "moveToFolder"
 		},
 		{
 			id: "moveOutOfFolder",
@@ -100,7 +118,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.moveOutOfFolder",
 			shortcutId: "zen-browser-utilities-shortcut-move-out-of-folder",
 			commandId: "zen-browser-utilities-command-move-out-of-folder",
-			shortcutGroup: "windowAndTabManagement"
+			shortcutGroup: "windowAndTabManagement",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.moveOutOfFolder",
+			contextMenuLabel: "Show “Move Out of Folder” in the tab right-click context menu",
+			contextMenuMenuId: "moveOutOfFolder"
 		},
 		{
 			id: "duplicatePinnedBelow",
@@ -108,7 +129,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.duplicatePinnedBelow",
 			shortcutId: "zen-browser-utilities-shortcut-duplicate-pinned-below",
 			commandId: "zen-browser-utilities-command-duplicate-pinned-below",
-			shortcutGroup: "windowAndTabManagement"
+			shortcutGroup: "windowAndTabManagement",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.duplicatePinnedBelow",
+			contextMenuLabel: "Show “Duplicate Pinned Tab Below” in the tab right-click context menu",
+			contextMenuMenuId: "duplicatePinnedBelow"
 		},
 		{
 			id: "moveToWorkspacePrompt",
@@ -116,7 +140,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.moveToWorkspacePrompt",
 			shortcutId: "zen-browser-utilities-shortcut-move-to-space-container",
 			commandId: "zen-browser-utilities-command-move-to-space-container",
-			shortcutGroup: "zen-workspace"
+			shortcutGroup: "zen-workspace",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.moveToWorkspace",
+			contextMenuLabel: "Show “Move to Space Container” in the tab right-click context menu",
+			contextMenuMenuId: "moveToWorkspace"
 		},
 		{
 			id: "copySelectedTabUrls",
@@ -124,7 +151,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.copySelectedTabUrls",
 			shortcutId: "zen-browser-utilities-shortcut-copy-selected-tab-links",
 			commandId: "zen-browser-utilities-command-copy-selected-tab-links",
-			shortcutGroup: "pageOperations"
+			shortcutGroup: "pageOperations",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.copySelectedTabUrls",
+			contextMenuLabel: "Show “Copy Selected Tab Links” in the tab right-click context menu",
+			contextMenuMenuId: "copySelectedTabUrls"
 		},
 		{
 			id: "pasteTabUrls",
@@ -132,7 +162,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.pasteTabUrls",
 			shortcutId: "zen-browser-utilities-shortcut-paste-links-as-tabs",
 			commandId: "zen-browser-utilities-command-paste-links-as-tabs",
-			shortcutGroup: "pageOperations"
+			shortcutGroup: "pageOperations",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.pasteTabUrls",
+			contextMenuLabel: "Show “Paste Links as Tabs” in the tab right-click context menu",
+			contextMenuMenuId: "pasteTabUrls"
 		},
 		{
 			id: "pasteTabUrlsCsv",
@@ -140,7 +173,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.pasteTabUrlsCsv",
 			shortcutId: "zen-browser-utilities-shortcut-paste-csv-links-as-tabs",
 			commandId: "zen-browser-utilities-command-paste-csv-links-as-tabs",
-			shortcutGroup: "pageOperations"
+			shortcutGroup: "pageOperations",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.pasteTabUrlsCsv",
+			contextMenuLabel: "Show “Paste CSV Links as Tabs” in the tab right-click context menu",
+			contextMenuMenuId: "pasteTabUrlsCsv"
 		},
 		{
 			id: "closeStaleTabs",
@@ -148,7 +184,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.closeStaleTabs",
 			shortcutId: "zen-browser-utilities-shortcut-close-stale-tabs",
 			commandId: "zen-browser-utilities-command-close-stale-tabs",
-			shortcutGroup: "zen-other"
+			shortcutGroup: "zen-other",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.closeStaleTabs",
+			contextMenuLabel: "Show “Close Stale Tabs Now” in the tab right-click context menu",
+			contextMenuMenuId: "closeStaleTabs"
 		},
 		{
 			id: "replacePinnedUrlWithCurrent",
@@ -156,7 +195,10 @@
 			prefKey: "zen-browser-utilities.shortcuts.replacePinnedUrlWithCurrent",
 			shortcutId: "zen-browser-utilities-shortcut-replace-pinned-url-with-current",
 			commandId: "zen-browser-utilities-command-replace-pinned-url-with-current",
-			shortcutGroup: "pageOperations"
+			shortcutGroup: "pageOperations",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.replacePinnedUrlWithCurrent",
+			contextMenuLabel: "Show “Replace Pinned URL with Current” in the tab right-click context menu",
+			contextMenuMenuId: "replacePinnedUrlWithCurrent"
 		}
 	];
 	var ACTIONS_BY_ID = new Map(ACTIONS.map((action) => [action.id, action]));
@@ -414,7 +456,6 @@
 		const DEFAULT_STALE_MAX_AGE_MINUTES = 10080;
 		const DEFAULT_STALE_CHECK_INTERVAL_MINUTES = 15;
 		const STALE_MONITOR_INTERVAL_MS = 6e4;
-		const CONTEXT_MENU_ENABLED_PREF = "zen-browser-utilities.contextMenu.enabled";
 		const BROWSER_URL = "chrome://browser/content/browser.xhtml";
 		const CUSTOM_COMMANDSET_ID = "zen-browser-utilities-commandset";
 		const CUSTOM_SHORTCUT_ROW_ATTRIBUTE = "data-zen-browser-utilities-shortcut";
@@ -424,27 +465,9 @@
 		const ZEN_CKS_WRAPPER_ID = `${ZEN_CKS_CLASS_BASE}-wrapper`;
 		const ZEN_CKS_GROUP_PREFIX = `${ZEN_CKS_CLASS_BASE}-group`;
 		const KEYBIND_ATTRIBUTE_KEY = "key";
-		const LEGACY_HAS_SAVED_FLAG = "_hasSafed";
-		const LEGACY_UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsafed`;
-		const LEGACY_UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsafed`;
 		const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
 		const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
-		const CUSTOM_MENU_ITEM_IDS = [
-			MENU_IDS.moveToStart,
-			MENU_IDS.moveToEnd,
-			MENU_IDS.createNewFolder,
-			MENU_IDS.closeTabsAbove,
-			MENU_IDS.closeTabsBelow,
-			MENU_IDS.copySelectedTabUrls,
-			MENU_IDS.pasteTabUrls,
-			MENU_IDS.pasteTabUrlsCsv,
-			MENU_IDS.moveToFolder,
-			MENU_IDS.moveOutOfFolder,
-			MENU_IDS.duplicatePinnedBelow,
-			MENU_IDS.replacePinnedUrlWithCurrent,
-			MENU_IDS.closeStaleTabs,
-			MENU_IDS.moveToWorkspace
-		];
+		const CONTEXT_MENU_ACTIONS = ACTIONS.filter((action) => action.contextMenuPrefKey && action.contextMenuMenuId);
 		const KEYCODE_DISPLAY_NAMES = new Map([
 			["VK_BACK", "Backspace"],
 			["VK_DELETE", "Delete"],
@@ -520,6 +543,22 @@
 				logError(error);
 				return null;
 			}
+		}
+		function getShortcutEditorSavedState(settings) {
+			return Boolean(settings?._hasSaved);
+		}
+		function setShortcutEditorSavedState(settings, value) {
+			if (settings) settings._hasSaved = value;
+		}
+		function getContextMenuElement(action) {
+			return document.getElementById(MENU_IDS[action.contextMenuMenuId]) || null;
+		}
+		function isContextMenuActionEnabled(action) {
+			return getBoolPref(action.contextMenuPrefKey, true);
+		}
+		function setContextMenuActionHidden(action, hidden) {
+			const element = getContextMenuElement(action);
+			if (element) element.hidden = hidden || !isContextMenuActionEnabled(action);
 		}
 		function getConfiguredBatchSize() {
 			return parsePositiveInteger(getStringPref("zen-browser-utilities.close.batchSize"), DEFAULT_BATCH_SIZE, {
@@ -1074,37 +1113,47 @@
 			input.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
 			input.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-not-set`);
 		}
+		function createUnsavedShortcutNotice() {
+			return window.MozXULElement.parseXULToFragment(`
+      <label class="${UNSAVED_CLASS}" data-l10n-id="zen-key-unsaved"></label>
+    `);
+		}
+		function createShortcutEditorRow() {
+			return window.MozXULElement.parseXULToFragment(`
+      <hbox class="${ZEN_CKS_CLASS_BASE}" ${CUSTOM_SHORTCUT_ROW_ATTRIBUTE}="true">
+        <label class="${ZEN_CKS_LABEL_CLASS}" />
+        <vbox flex="1">
+          <html:input readonly="1" class="${ZEN_CKS_INPUT_FIELD_CLASS}" />
+        </vbox>
+      </hbox>
+    `).firstElementChild;
+		}
 		function attachShortcutInputEvents(input, action) {
 			input.addEventListener("focus", (event) => {
 				const settings = window.gZenCKSSettings;
 				if (!settings) return;
 				settings._currentActionID = action.shortcutId;
-				settings._hasSaved = true;
-				settings[LEGACY_HAS_SAVED_FLAG] = true;
+				setShortcutEditorSavedState(settings, true);
 				event.target.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
 			});
 			input.addEventListener("editDone", (event) => {
-				event.target.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
+				event.target.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
 			});
 			input.addEventListener("blur", (event) => {
 				const settings = window.gZenCKSSettings;
 				const target = event.target;
 				if (!settings) return;
 				target.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
-				if (!(settings._hasSaved ?? settings[LEGACY_HAS_SAVED_FLAG])) {
+				if (!getShortcutEditorSavedState(settings)) {
 					target.classList.add(UNSAVED_INPUT_CLASS);
-					target.classList.add(LEGACY_UNSAVED_INPUT_CLASS);
 					if (!target.nextElementSibling) {
-						target.after(window.MozXULElement.parseXULToFragment(`
-              <label class="${LEGACY_UNSAVED_CLASS} ${UNSAVED_CLASS}" data-l10n-id="zen-key-unsaved"></label>
-            `));
+						target.after(createUnsavedShortcutNotice());
 						target.value = "Not set";
 					}
 				} else {
 					target.classList.remove(UNSAVED_INPUT_CLASS);
-					target.classList.remove(LEGACY_UNSAVED_INPUT_CLASS);
 					const sibling = target.nextElementSibling;
-					if (sibling && (sibling.classList.contains(LEGACY_UNSAVED_CLASS) || sibling.classList.contains(UNSAVED_CLASS))) sibling.remove();
+					if (sibling && sibling.classList.contains(UNSAVED_CLASS)) sibling.remove();
 				}
 			});
 		}
@@ -1130,14 +1179,7 @@
 			});
 			for (const action of ACTIONS) {
 				const shortcut = getCustomShortcutFromManager(action);
-				const row = window.MozXULElement.parseXULToFragment(`
-        <hbox class="${ZEN_CKS_CLASS_BASE}" ${CUSTOM_SHORTCUT_ROW_ATTRIBUTE}="true">
-          <label class="${ZEN_CKS_LABEL_CLASS}" />
-          <vbox flex="1">
-            <html:input readonly="1" class="${ZEN_CKS_INPUT_FIELD_CLASS}" />
-          </vbox>
-        </hbox>
-      `).firstElementChild;
+				const row = createShortcutEditorRow();
 				const label = row.querySelector(`.${ZEN_CKS_LABEL_CLASS}`);
 				const input = row.querySelector(`.${ZEN_CKS_INPUT_FIELD_CLASS}`);
 				label.textContent = action.label;
@@ -1162,6 +1204,16 @@
 			const tryInstallHook = () => {
 				const settings = window.gZenCKSSettings;
 				if (!settings || settings.__zenBrowserUtilitiesPatched) return Boolean(settings);
+				if (!Object.getOwnPropertyDescriptor(settings, "_hasSaved")) Object.defineProperty(settings, "_hasSaved", {
+					configurable: true,
+					enumerable: false,
+					get() {
+						return this["_hasSafed"];
+					},
+					set(value) {
+						this["_hasSafed"] = value;
+					}
+				});
 				const originalInitializeCKS = settings._initializeCKS.bind(settings);
 				settings._initializeCKS = async (...args) => {
 					await originalInitializeCKS(...args);
@@ -1193,15 +1245,14 @@
 		function updateContextMenuSeparatorVisibility() {
 			const separator = document.getElementById(MENU_IDS.separator);
 			if (!separator) return;
-			const visibleCustomItems = CUSTOM_MENU_ITEM_IDS.some((id) => {
-				const element = document.getElementById(id);
+			separator.hidden = !CONTEXT_MENU_ACTIONS.some((action) => {
+				const element = getContextMenuElement(action);
 				return element && !element.hidden;
 			});
-			separator.hidden = !getBoolPref(CONTEXT_MENU_ENABLED_PREF, true) || !visibleCustomItems;
 		}
 		function hideAllCustomContextMenuItems() {
-			for (const id of CUSTOM_MENU_ITEM_IDS) {
-				const element = document.getElementById(id);
+			for (const action of CONTEXT_MENU_ACTIONS) {
+				const element = getContextMenuElement(action);
 				if (element) element.hidden = true;
 			}
 			updateContextMenuSeparatorVisibility();
@@ -1254,10 +1305,10 @@
 			while (popup?.firstChild) popup.firstChild.remove();
 		}
 		function buildFolderMenu() {
-			const folderMenu = document.getElementById(MENU_IDS.moveToFolder);
+			const folderAction = ACTIONS_BY_ID.get("moveToFolderPrompt");
 			const folders = getAvailableFolders();
 			clearPopupChildren(MENU_IDS.moveToFolderPopup);
-			folderMenu.hidden = !folders.length;
+			setContextMenuActionHidden(folderAction, !folders.length);
 			const popup = document.getElementById(MENU_IDS.moveToFolderPopup);
 			for (const folder of folders) {
 				const item = document.createXULElement("menuitem");
@@ -1270,10 +1321,10 @@
 			}
 		}
 		function buildWorkspaceMenu() {
-			const workspaceMenu = document.getElementById(MENU_IDS.moveToWorkspace);
+			const workspaceAction = ACTIONS_BY_ID.get("moveToWorkspacePrompt");
 			const workspaces = getAvailableWorkspaces();
 			clearPopupChildren(MENU_IDS.moveToWorkspacePopup);
-			workspaceMenu.hidden = workspaces.length < 1;
+			setContextMenuActionHidden(workspaceAction, workspaces.length < 1);
 			const popup = document.getElementById(MENU_IDS.moveToWorkspacePopup);
 			for (const workspace of workspaces) {
 				const item = document.createXULElement("menuitem");
@@ -1291,20 +1342,22 @@
 				hideAllCustomContextMenuItems();
 				return;
 			}
-			if (!getBoolPref(CONTEXT_MENU_ENABLED_PREF, true)) {
-				hideAllCustomContextMenuItems();
-				return;
-			}
 			const orderedTabs = getSiblingTabs(contextTab);
 			const selectedIds = getSelectionIdsWithFallback(contextTab);
 			const aboveTabs = getItemsBeforeSelection(orderedTabs, selectedIds);
 			const belowTabs = getItemsAfterSelection(orderedTabs, selectedIds);
-			document.getElementById(MENU_IDS.closeTabsAbove).hidden = !aboveTabs.length;
-			document.getElementById(MENU_IDS.closeTabsBelow).hidden = !belowTabs.length;
-			document.getElementById(MENU_IDS.moveOutOfFolder).hidden = !getCurrentFolder(contextTab);
-			document.getElementById(MENU_IDS.duplicatePinnedBelow).hidden = !getSelectedPinnedTabs().length || getSelectedPinnedTabs().length !== getContextTabs().length;
-			document.getElementById(MENU_IDS.closeStaleTabs).hidden = !collectStaleTabs().length;
-			document.getElementById(MENU_IDS.replacePinnedUrlWithCurrent).hidden = !getCurrentTabUrl() || !getSelectedPinnedTabs().length;
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("moveToStart"), false);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("moveToEnd"), false);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("createNewFolder"), false);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("closeTabsAbove"), !aboveTabs.length);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("closeTabsBelow"), !belowTabs.length);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("copySelectedTabUrls"), false);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("pasteTabUrls"), false);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("pasteTabUrlsCsv"), false);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("moveOutOfFolder"), !getCurrentFolder(contextTab));
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("duplicatePinnedBelow"), !getSelectedPinnedTabs().length || getSelectedPinnedTabs().length !== getContextTabs().length);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("closeStaleTabs"), !collectStaleTabs().length);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("replacePinnedUrlWithCurrent"), !getCurrentTabUrl() || !getSelectedPinnedTabs().length);
 			buildFolderMenu();
 			buildWorkspaceMenu();
 			updateContextMenuSeparatorVisibility();

@@ -6,6 +6,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-move-to-start',
     commandId: 'zen-browser-utilities-command-move-to-start',
     shortcutGroup: 'windowAndTabManagement',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.moveToStart',
+    contextMenuLabel: 'Show “Move to Start” in the tab right-click context menu',
+    contextMenuMenuId: 'moveToStart',
   },
   {
     id: 'moveToEnd',
@@ -14,6 +17,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-move-to-end',
     commandId: 'zen-browser-utilities-command-move-to-end',
     shortcutGroup: 'windowAndTabManagement',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.moveToEnd',
+    contextMenuLabel: 'Show “Move to End” in the tab right-click context menu',
+    contextMenuMenuId: 'moveToEnd',
   },
   {
     id: 'createNewFolder',
@@ -22,6 +28,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-create-new-folder',
     commandId: 'zen-browser-utilities-command-create-new-folder',
     shortcutGroup: 'windowAndTabManagement',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.createNewFolder',
+    contextMenuLabel: 'Show “Create New Folder” in the tab right-click context menu',
+    contextMenuMenuId: 'createNewFolder',
   },
   {
     id: 'closeTabsAbove',
@@ -30,6 +39,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-close-tabs-above',
     commandId: 'zen-browser-utilities-command-close-tabs-above',
     shortcutGroup: 'windowAndTabManagement',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.closeTabsAbove',
+    contextMenuLabel: 'Show “Close Tabs Above” in the tab right-click context menu',
+    contextMenuMenuId: 'closeTabsAbove',
   },
   {
     id: 'closeTabsBelow',
@@ -38,6 +50,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-close-tabs-below',
     commandId: 'zen-browser-utilities-command-close-tabs-below',
     shortcutGroup: 'windowAndTabManagement',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.closeTabsBelow',
+    contextMenuLabel: 'Show “Close Tabs Below” in the tab right-click context menu',
+    contextMenuMenuId: 'closeTabsBelow',
   },
   {
     id: 'moveToFolderPrompt',
@@ -46,6 +61,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-move-to-folder',
     commandId: 'zen-browser-utilities-command-move-to-folder',
     shortcutGroup: 'windowAndTabManagement',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.moveToFolder',
+    contextMenuLabel: 'Show “Move to Folder” in the tab right-click context menu',
+    contextMenuMenuId: 'moveToFolder',
   },
   {
     id: 'moveOutOfFolder',
@@ -54,6 +72,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-move-out-of-folder',
     commandId: 'zen-browser-utilities-command-move-out-of-folder',
     shortcutGroup: 'windowAndTabManagement',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.moveOutOfFolder',
+    contextMenuLabel: 'Show “Move Out of Folder” in the tab right-click context menu',
+    contextMenuMenuId: 'moveOutOfFolder',
   },
   {
     id: 'duplicatePinnedBelow',
@@ -62,6 +83,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-duplicate-pinned-below',
     commandId: 'zen-browser-utilities-command-duplicate-pinned-below',
     shortcutGroup: 'windowAndTabManagement',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.duplicatePinnedBelow',
+    contextMenuLabel: 'Show “Duplicate Pinned Tab Below” in the tab right-click context menu',
+    contextMenuMenuId: 'duplicatePinnedBelow',
   },
   {
     id: 'moveToWorkspacePrompt',
@@ -70,6 +94,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-move-to-space-container',
     commandId: 'zen-browser-utilities-command-move-to-space-container',
     shortcutGroup: 'zen-workspace',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.moveToWorkspace',
+    contextMenuLabel: 'Show “Move to Space Container” in the tab right-click context menu',
+    contextMenuMenuId: 'moveToWorkspace',
   },
   {
     id: 'copySelectedTabUrls',
@@ -78,6 +105,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-copy-selected-tab-links',
     commandId: 'zen-browser-utilities-command-copy-selected-tab-links',
     shortcutGroup: 'pageOperations',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.copySelectedTabUrls',
+    contextMenuLabel: 'Show “Copy Selected Tab Links” in the tab right-click context menu',
+    contextMenuMenuId: 'copySelectedTabUrls',
   },
   {
     id: 'pasteTabUrls',
@@ -86,6 +116,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-paste-links-as-tabs',
     commandId: 'zen-browser-utilities-command-paste-links-as-tabs',
     shortcutGroup: 'pageOperations',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.pasteTabUrls',
+    contextMenuLabel: 'Show “Paste Links as Tabs” in the tab right-click context menu',
+    contextMenuMenuId: 'pasteTabUrls',
   },
   {
     id: 'pasteTabUrlsCsv',
@@ -94,6 +127,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-paste-csv-links-as-tabs',
     commandId: 'zen-browser-utilities-command-paste-csv-links-as-tabs',
     shortcutGroup: 'pageOperations',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.pasteTabUrlsCsv',
+    contextMenuLabel: 'Show “Paste CSV Links as Tabs” in the tab right-click context menu',
+    contextMenuMenuId: 'pasteTabUrlsCsv',
   },
   {
     id: 'closeStaleTabs',
@@ -102,6 +138,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-close-stale-tabs',
     commandId: 'zen-browser-utilities-command-close-stale-tabs',
     shortcutGroup: 'zen-other',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.closeStaleTabs',
+    contextMenuLabel: 'Show “Close Stale Tabs Now” in the tab right-click context menu',
+    contextMenuMenuId: 'closeStaleTabs',
   },
   {
     id: 'replacePinnedUrlWithCurrent',
@@ -110,6 +149,9 @@ export const ACTIONS = [
     shortcutId: 'zen-browser-utilities-shortcut-replace-pinned-url-with-current',
     commandId: 'zen-browser-utilities-command-replace-pinned-url-with-current',
     shortcutGroup: 'pageOperations',
+    contextMenuPrefKey: 'zen-browser-utilities.contextMenu.replacePinnedUrlWithCurrent',
+    contextMenuLabel: 'Show “Replace Pinned URL with Current” in the tab right-click context menu',
+    contextMenuMenuId: 'replacePinnedUrlWithCurrent',
   },
 ];
 
