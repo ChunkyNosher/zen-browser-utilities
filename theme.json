@@ -21,7 +21,9 @@
   "scripts": {
     "zen-browser-utilities.uc.js": {
       "include": [
-        "chrome://browser/content/browser.xhtml"
+        "chrome://browser/content/browser.xhtml",
+        "about:preferences*",
+        "about:settings*"
       ]
     }
   },

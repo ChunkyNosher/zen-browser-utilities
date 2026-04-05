@@ -1,4 +1,5 @@
 const MODIFIER_ORDER = ['Control', 'Meta', 'Alt', 'Shift'];
+const FUNCTION_KEY_PATTERN = /^F(?:[1-9]|1\d|2[0-4])$/;
 
 const MODIFIER_ALIASES = new Map([
   ['ctrl', 'Control'],
@@ -27,6 +28,22 @@ const KEY_ALIASES = new Map([
 ]);
 
 const MODIFIER_KEYS = new Set(['Control', 'Meta', 'Alt', 'Shift']);
+export const SPECIAL_KEYCODES = new Map([
+  ['Backspace', 'VK_BACK'],
+  ['Delete', 'VK_DELETE'],
+  ['End', 'VK_END'],
+  ['Enter', 'VK_RETURN'],
+  ['Escape', 'VK_ESCAPE'],
+  ['Home', 'VK_HOME'],
+  ['PageDown', 'VK_PAGE_DOWN'],
+  ['PageUp', 'VK_PAGE_UP'],
+  ['Space', 'VK_SPACE'],
+  ['Tab', 'VK_TAB'],
+  ['ArrowLeft', 'VK_LEFT'],
+  ['ArrowRight', 'VK_RIGHT'],
+  ['ArrowUp', 'VK_UP'],
+  ['ArrowDown', 'VK_DOWN'],
+]);
 
 function normalizeToken(token) {
   const trimmed = token.trim();
@@ -110,4 +127,86 @@ export function shortcutMatchesEvent(shortcut, event) {
   }
 
   return normalizedShortcut === eventToShortcut(event);
+}
+
+export function parseShortcutBinding(shortcut, {
+  isMac = false,
+} = {}) {
+  const normalizedShortcut = normalizeShortcut(shortcut);
+
+  if (!normalizedShortcut) {
+    return null;
+  }
+
+  const parts = normalizedShortcut.split('+');
+  const key = parts.at(-1);
+
+  if (!key || MODIFIER_KEYS.has(key)) {
+    return null;
+  }
+
+  const modifiers = {
+    control: false,
+    alt: false,
+    shift: false,
+    meta: false,
+    accel: false,
+  };
+
+  for (const part of parts.slice(0, -1)) {
+    switch (part) {
+      case 'Control':
+        if (isMac) {
+          modifiers.control = true;
+        } else {
+          modifiers.accel = true;
+        }
+        break;
+      case 'Meta':
+        modifiers.meta = true;
+        break;
+      case 'Alt':
+        modifiers.alt = true;
+        break;
+      case 'Shift':
+        modifiers.shift = true;
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (key === 'Plus') {
+    return {
+      key: '+',
+      keycode: '',
+      modifiers,
+    };
+  }
+
+  if (SPECIAL_KEYCODES.has(key)) {
+    return {
+      key: '',
+      keycode: SPECIAL_KEYCODES.get(key),
+      modifiers,
+    };
+  }
+
+  if (FUNCTION_KEY_PATTERN.test(key)) {
+    return {
+      key: '',
+      keycode: `VK_${key}`,
+      modifiers,
+    };
+  }
+
+  return {
+    key,
+    keycode: '',
+    modifiers,
+  };
+}
+
+export function getSpecialKeycode(key) {
+  return SPECIAL_KEYCODES.get(normalizeToken(key));
 }

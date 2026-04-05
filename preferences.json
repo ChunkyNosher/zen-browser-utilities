@@ -1,101 +1,87 @@
 [
   {
-    "property": "zen-browser-utilities.shortcuts.moveToStart",
-    "label": "Shortcut: Move current tab(s) to start",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+Home"
+    "property": "zen-browser-utilities.contextMenu.moveToStart",
+    "label": "Show “Move to Start” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.moveToEnd",
-    "label": "Shortcut: Move current tab(s) to end",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+End"
+    "property": "zen-browser-utilities.contextMenu.moveToEnd",
+    "label": "Show “Move to End” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.createNewFolder",
-    "label": "Shortcut: Create new folder from current tab(s)",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+N"
+    "property": "zen-browser-utilities.contextMenu.createNewFolder",
+    "label": "Show “Create New Folder” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.closeTabsAbove",
-    "label": "Shortcut: Close tabs above current selection",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+PageUp"
+    "property": "zen-browser-utilities.contextMenu.closeTabsAbove",
+    "label": "Show “Close Tabs Above” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.closeTabsBelow",
-    "label": "Shortcut: Close tabs below current selection",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+PageDown"
+    "property": "zen-browser-utilities.contextMenu.closeTabsBelow",
+    "label": "Show “Close Tabs Below” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.moveToFolderPrompt",
-    "label": "Shortcut: Move current tab(s) to another folder",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+F"
+    "property": "zen-browser-utilities.contextMenu.moveToFolder",
+    "label": "Show “Move to Folder” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.moveOutOfFolder",
-    "label": "Shortcut: Move current tab(s) out of the current folder",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+O"
+    "property": "zen-browser-utilities.contextMenu.moveOutOfFolder",
+    "label": "Show “Move Out of Folder” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.duplicatePinnedBelow",
-    "label": "Shortcut: Duplicate pinned tab directly below the original",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+D"
+    "property": "zen-browser-utilities.contextMenu.duplicatePinnedBelow",
+    "label": "Show “Duplicate Pinned Tab Below” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.moveToWorkspacePrompt",
-    "label": "Shortcut: Re-open current tab(s) in another Zen space/container",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+W"
+    "property": "zen-browser-utilities.contextMenu.moveToWorkspace",
+    "label": "Show “Move to Space Container” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.copySelectedTabUrls",
-    "label": "Shortcut: Copy all selected tab URLs",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+C"
+    "property": "zen-browser-utilities.contextMenu.copySelectedTabUrls",
+    "label": "Show “Copy Selected Tab Links” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.pasteTabUrls",
-    "label": "Shortcut: Paste newline-delimited links as tabs",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+V"
+    "property": "zen-browser-utilities.contextMenu.pasteTabUrls",
+    "label": "Show “Paste Links as Tabs” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.pasteTabUrlsCsv",
-    "label": "Shortcut: Paste CSV links as tabs",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+B"
+    "property": "zen-browser-utilities.contextMenu.pasteTabUrlsCsv",
+    "label": "Show “Paste CSV Links as Tabs” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.closeStaleTabs",
-    "label": "Shortcut: Close stale unpinned tabs now",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+X"
+    "property": "zen-browser-utilities.contextMenu.closeStaleTabs",
+    "label": "Show “Close Stale Tabs Now” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.shortcuts.replacePinnedUrlWithCurrent",
-    "label": "Shortcut: Replace pinned URL with current",
-    "type": "string",
-    "defaultValue": "",
-    "placeholder": "Alt+Shift+R"
+    "property": "zen-browser-utilities.contextMenu.replacePinnedUrlWithCurrent",
+    "label": "Show “Replace Pinned URL with Current” in the tab right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
   },
   {
     "property": "zen-browser-utilities.close.batchSize",

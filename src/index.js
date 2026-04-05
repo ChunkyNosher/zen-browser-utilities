@@ -1,4 +1,4 @@
-/* global Services, SessionStore, TabContextMenu, gBrowser, gZenFolders, gZenWorkspaces, MozXULElement, ContextualIdentityService, Cc, Ci */
+/* global Services, SessionStore, TabContextMenu, gBrowser, gZenFolders, gZenWorkspaces, MozXULElement, ContextualIdentityService, Cc, Ci, ChromeUtils, AppConstants */
 
 import {
   buildFolderChoices,
@@ -7,9 +7,13 @@ import {
   getItemsBeforeSelection,
   getOrderedSelectionIds,
 } from './action-model.js';
-import { ACTIONS_BY_ID } from './action-definitions.js';
+import { ACTIONS, ACTIONS_BY_ID } from './action-definitions.js';
 import { chunkItems, parsePositiveInteger } from './batch-utils.js';
-import { shortcutMatchesEvent } from './shortcut-utils.js';
+import {
+  getSpecialKeycode,
+  parseShortcutBinding,
+  shortcutMatchesEvent,
+} from './shortcut-utils.js';
 import { getStaleTabs } from './stale-tab-utils.js';
 import {
   extractUrlsFromCsvText,
@@ -46,7 +50,63 @@ import {
   const DEFAULT_STALE_MAX_AGE_MINUTES = 10080;
   const DEFAULT_STALE_CHECK_INTERVAL_MINUTES = 15;
   const STALE_MONITOR_INTERVAL_MS = 60_000;
+  const BROWSER_URL = 'chrome://browser/content/browser.xhtml';
+  const CUSTOM_COMMANDSET_ID = 'zen-browser-utilities-commandset';
+  const CUSTOM_SHORTCUT_ROW_ATTRIBUTE = 'data-zen-browser-utilities-shortcut';
+  const ZEN_CKS_CLASS_BASE = 'zenCKSOption';
+  const ZEN_CKS_INPUT_FIELD_CLASS = `${ZEN_CKS_CLASS_BASE}-input`;
+  const ZEN_CKS_LABEL_CLASS = `${ZEN_CKS_CLASS_BASE}-label`;
+  const ZEN_CKS_WRAPPER_ID = `${ZEN_CKS_CLASS_BASE}-wrapper`;
+  const ZEN_CKS_GROUP_PREFIX = `${ZEN_CKS_CLASS_BASE}-group`;
+  const KEYBIND_ATTRIBUTE_KEY = 'key';
+  const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
+  const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
+  const CONTEXT_MENU_ACTIONS = ACTIONS.filter(
+    action => action.contextMenuPrefKey && action.contextMenuMenuId
+  );
+  const KEYCODE_DISPLAY_NAMES = new Map([
+    ['VK_BACK', 'Backspace'],
+    ['VK_DELETE', 'Delete'],
+    ['VK_DOWN', '↓'],
+    ['VK_END', 'End'],
+    ['VK_ESCAPE', AppConstants?.platform === 'macosx' ? '⎋' : 'Esc'],
+    ['VK_F1', 'F1'],
+    ['VK_F2', 'F2'],
+    ['VK_F3', 'F3'],
+    ['VK_F4', 'F4'],
+    ['VK_F5', 'F5'],
+    ['VK_F6', 'F6'],
+    ['VK_F7', 'F7'],
+    ['VK_F8', 'F8'],
+    ['VK_F9', 'F9'],
+    ['VK_F10', 'F10'],
+    ['VK_F11', 'F11'],
+    ['VK_F12', 'F12'],
+    ['VK_F13', 'F13'],
+    ['VK_F14', 'F14'],
+    ['VK_F15', 'F15'],
+    ['VK_F16', 'F16'],
+    ['VK_F17', 'F17'],
+    ['VK_F18', 'F18'],
+    ['VK_F19', 'F19'],
+    ['VK_F20', 'F20'],
+    ['VK_F21', 'F21'],
+    ['VK_F22', 'F22'],
+    ['VK_F23', 'F23'],
+    ['VK_F24', 'F24'],
+    ['VK_HOME', 'Home'],
+    ['VK_LEFT', '←'],
+    ['VK_PAGE_DOWN', 'PageDown'],
+    ['VK_PAGE_UP', 'PageUp'],
+    ['VK_RETURN', AppConstants?.platform === 'macosx' ? '↩' : 'Enter'],
+    ['VK_RIGHT', '→'],
+    ['VK_SPACE', AppConstants?.platform === 'macosx' ? '␣' : 'Space'],
+    ['VK_TAB', 'Tab'],
+    ['VK_UP', '↑'],
+  ]);
   let lastStaleSweepAt = 0;
+  let keyboardFallbackInstalled = false;
+  let shortcutEditorObserver = null;
 
   function logError(error) {
     console.error('Zen Browser Utilities:', error);
@@ -67,6 +127,55 @@ import {
     } catch (error) {
       logError(error);
       return fallback;
+    }
+  }
+
+  function isBrowserPage() {
+    return window.location.href === BROWSER_URL;
+  }
+
+  function isPreferencesPage() {
+    return (
+      window.location.href.startsWith('about:preferences') ||
+      window.location.href.startsWith('about:settings')
+    );
+  }
+
+  function getZenShortcutModifiersClass() {
+    try {
+      return ChromeUtils.importESModule(
+        'chrome://browser/content/zen-components/ZenKeyboardShortcuts.mjs',
+        { global: 'current' }
+      ).nsKeyShortcutModifiers;
+    } catch (error) {
+      logError(error);
+      return null;
+    }
+  }
+
+  function getShortcutEditorSavedState(settings) {
+    return Boolean(settings?._hasSaved);
+  }
+
+  function setShortcutEditorSavedState(settings, value) {
+    if (settings) {
+      settings._hasSaved = value;
+    }
+  }
+
+  function getContextMenuElement(action) {
+    return document.getElementById(MENU_IDS[action.contextMenuMenuId]) || null;
+  }
+
+  function isContextMenuActionEnabled(action) {
+    return getBoolPref(action.contextMenuPrefKey, true);
+  }
+
+  function setContextMenuActionHidden(action, hidden) {
+    const element = getContextMenuElement(action);
+
+    if (element) {
+      element.hidden = hidden || !isContextMenuActionEnabled(action);
     }
   }
 
@@ -798,6 +907,492 @@ import {
     return closeStaleTabsNow();
   }
 
+  class CustomKeyboardShortcut {
+    constructor(action, modifiersClass, binding = null) {
+      this.id = action.shortcutId;
+      this.action = action.commandId;
+      this.group = action.shortcutGroup;
+      this.label = action.label;
+      this.ModifiersClass = modifiersClass;
+      this.modifiers = modifiersClass.fromObject(binding?.modifiers || {});
+      this.key = binding?.key || '';
+      this.keycode = binding?.keycode || '';
+    }
+
+    getID() {
+      return this.id;
+    }
+
+    getAction() {
+      return this.action;
+    }
+
+    getL10NID() {
+      return null;
+    }
+
+    getGroup() {
+      return this.group;
+    }
+
+    getModifiers() {
+      return this.modifiers;
+    }
+
+    getKeyNameOrCode() {
+      return this.key || this.keycode;
+    }
+
+    isEmpty() {
+      return !this.key && !this.keycode;
+    }
+
+    isUserEditable() {
+      return true;
+    }
+
+    isInternal() {
+      return false;
+    }
+
+    isDisabled() {
+      return false;
+    }
+
+    isReserved() {
+      return false;
+    }
+
+    clearKeybind() {
+      this.key = '';
+      this.keycode = '';
+      this.modifiers = this.ModifiersClass.fromObject({});
+    }
+
+    setNewBinding(shortcut) {
+      const specialKeycode = getSpecialKeycode(shortcut);
+
+      if (specialKeycode) {
+        this.keycode = specialKeycode;
+        this.key = '';
+        return;
+      }
+
+      this.keycode = '';
+      this.key = shortcut;
+    }
+
+    setModifiers(modifiers) {
+      this.modifiers = modifiers;
+    }
+
+    toDisplayString() {
+      const displayKey = this.key
+        ? this.key.toUpperCase()
+        : KEYCODE_DISPLAY_NAMES.get(this.keycode) || this.keycode.replace(/^VK_/, '');
+
+      if (!displayKey) {
+        return '';
+      }
+
+      return `${this.modifiers.toDisplayString()}${displayKey}`;
+    }
+
+    toJSONForm() {
+      return {
+        id: this.id,
+        key: this.key,
+        keycode: this.keycode,
+        group: this.group,
+        l10nId: null,
+        modifiers: this.modifiers.toJSONString(),
+        action: this.action,
+        disabled: false,
+        reserved: false,
+        internal: false,
+      };
+    }
+
+    replaceWithChild(keyElement) {
+      keyElement.id = this.id;
+      keyElement.setAttribute('group', this.group);
+      keyElement.setAttribute('modifiers', this.modifiers.toString());
+      keyElement.setAttribute('command', this.action);
+      keyElement.setAttribute('zen-keybind', 'true');
+
+      if (this.keycode) {
+        keyElement.setAttribute('keycode', this.keycode);
+        keyElement.removeAttribute('key');
+      } else {
+        keyElement.setAttribute('key', this.key.toLowerCase());
+        keyElement.removeAttribute('keycode');
+      }
+
+      return keyElement;
+    }
+
+    toXHTMLElement(browserWindow) {
+      const keyElement = browserWindow.document.createXULElement('key');
+      return this.replaceWithChild(keyElement);
+    }
+  }
+
+  function createCustomKeyboardShortcut(action) {
+    const ModifiersClass = getZenShortcutModifiersClass();
+
+    if (!ModifiersClass) {
+      return null;
+    }
+
+    const binding = parseShortcutBinding(getStringPref(action.prefKey), {
+      isMac: AppConstants?.platform === 'macosx',
+    });
+
+    return new CustomKeyboardShortcut(action, ModifiersClass, binding);
+  }
+
+  function getShortcutManager() {
+    return window.gZenKeyboardShortcutsManager || null;
+  }
+
+  async function ensureShortcutManagerReady() {
+    const manager = getShortcutManager();
+
+    if (!manager?.getModifiableShortcuts) {
+      return null;
+    }
+
+    await manager.getModifiableShortcuts();
+    return manager;
+  }
+
+  async function ensureCustomShortcutDefinitions() {
+    const manager = await ensureShortcutManagerReady();
+
+    if (!manager || !Array.isArray(manager._currentShortcutList)) {
+      return false;
+    }
+
+    let changed = false;
+
+    for (const action of ACTIONS) {
+      if (manager._currentShortcutList.some(shortcut => shortcut?.getID?.() === action.shortcutId)) {
+        continue;
+      }
+
+      const shortcut = createCustomKeyboardShortcut(action);
+
+      if (!shortcut) {
+        return false;
+      }
+
+      manager._currentShortcutList.push(shortcut);
+      changed = true;
+    }
+
+    if (changed) {
+      await manager._saveShortcuts();
+
+      if (manager.inBrowserView) {
+        manager.triggerShortcutRebuild();
+      }
+    }
+
+    return true;
+  }
+
+  function installKeyboardFallback() {
+    if (keyboardFallbackInstalled) {
+      return;
+    }
+
+    window.addEventListener('keydown', onKeyDown, true);
+    keyboardFallbackInstalled = true;
+  }
+
+  function removeKeyboardFallback() {
+    if (!keyboardFallbackInstalled) {
+      return;
+    }
+
+    window.removeEventListener('keydown', onKeyDown, true);
+    keyboardFallbackInstalled = false;
+  }
+
+  function installShortcutCommands() {
+    let commandset = document.getElementById(CUSTOM_COMMANDSET_ID);
+
+    if (!commandset) {
+      commandset = document.createXULElement('commandset');
+      commandset.id = CUSTOM_COMMANDSET_ID;
+      const anchor =
+        document.getElementById('mainCommandSet') ||
+        document.getElementById('mainKeyset');
+
+      if (anchor) {
+        anchor.after(commandset);
+      } else {
+        document.documentElement.appendChild(commandset);
+      }
+    }
+
+    for (const action of ACTIONS) {
+      if (document.getElementById(action.commandId)) {
+        continue;
+      }
+
+      const command = document.createXULElement('command');
+      command.id = action.commandId;
+      command.addEventListener('command', () => {
+        return executeAction(action.id);
+      });
+      commandset.appendChild(command);
+    }
+  }
+
+  function getCustomShortcutFromManager(action) {
+    const manager = getShortcutManager();
+
+    return (
+      manager?._currentShortcutList?.find(shortcut => shortcut?.getID?.() === action.shortcutId) ||
+      null
+    );
+  }
+
+  function resetShortcutInputVisualState(input) {
+    input.value = 'Not set';
+    input.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-invalid`);
+    input.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
+    input.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-not-set`);
+  }
+
+  function createUnsavedShortcutNotice() {
+    return window.MozXULElement.parseXULToFragment(`
+      <label class="${UNSAVED_CLASS}" data-l10n-id="zen-key-unsaved"></label>
+    `);
+  }
+
+  function createShortcutEditorRow() {
+    const fragment = window.MozXULElement.parseXULToFragment(`
+      <hbox class="${ZEN_CKS_CLASS_BASE}" ${CUSTOM_SHORTCUT_ROW_ATTRIBUTE}="true">
+        <label class="${ZEN_CKS_LABEL_CLASS}" />
+        <vbox flex="1">
+          <html:input readonly="1" class="${ZEN_CKS_INPUT_FIELD_CLASS}" />
+        </vbox>
+      </hbox>
+    `);
+
+    return fragment.firstElementChild;
+  }
+
+  function attachShortcutInputEvents(input, action) {
+    input.addEventListener('focus', event => {
+      const settings = window.gZenCKSSettings;
+
+      if (!settings) {
+        return;
+      }
+
+      settings._currentActionID = action.shortcutId;
+      setShortcutEditorSavedState(settings, true);
+      event.target.classList.add(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
+    });
+
+    input.addEventListener('editDone', event => {
+      event.target.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
+    });
+
+    input.addEventListener('blur', event => {
+      const settings = window.gZenCKSSettings;
+      const target = event.target;
+
+      if (!settings) {
+        return;
+      }
+
+      target.classList.remove(`${ZEN_CKS_INPUT_FIELD_CLASS}-editing`);
+
+      if (!getShortcutEditorSavedState(settings)) {
+        target.classList.add(UNSAVED_INPUT_CLASS);
+
+        if (!target.nextElementSibling) {
+          target.after(createUnsavedShortcutNotice());
+          target.value = 'Not set';
+        }
+      } else {
+        target.classList.remove(UNSAVED_INPUT_CLASS);
+        const sibling = target.nextElementSibling;
+
+        if (sibling && sibling.classList.contains(UNSAVED_CLASS)) {
+          sibling.remove();
+        }
+      }
+    });
+  }
+
+  function insertShortcutRow(wrapper, row, group) {
+    const groupHeader = wrapper.querySelector(
+      `[data-group="${ZEN_CKS_GROUP_PREFIX}-${group}"]`
+    );
+
+    if (!groupHeader) {
+      wrapper.appendChild(row);
+      return;
+    }
+
+    let insertBefore = groupHeader.nextSibling;
+
+    while (insertBefore?.matches?.(`.${ZEN_CKS_CLASS_BASE}`)) {
+      insertBefore = insertBefore.nextSibling;
+    }
+
+    if (insertBefore) {
+      wrapper.insertBefore(row, insertBefore);
+      return;
+    }
+
+    wrapper.appendChild(row);
+  }
+
+  function renderShortcutEditorRows() {
+    const wrapper = document.getElementById(ZEN_CKS_WRAPPER_ID);
+
+    if (!wrapper || !window.gZenCKSSettings) {
+      return;
+    }
+
+    wrapper.querySelectorAll(`[${CUSTOM_SHORTCUT_ROW_ATTRIBUTE}="true"]`).forEach(node => {
+      node.remove();
+    });
+
+    for (const action of ACTIONS) {
+      const shortcut = getCustomShortcutFromManager(action);
+      const row = createShortcutEditorRow();
+      const label = row.querySelector(`.${ZEN_CKS_LABEL_CLASS}`);
+      const input = row.querySelector(`.${ZEN_CKS_INPUT_FIELD_CLASS}`);
+
+      label.textContent = action.label;
+      input.setAttribute(KEYBIND_ATTRIBUTE_KEY, action.shortcutId);
+      input.setAttribute('data-id', action.shortcutId);
+      input.setAttribute('data-group', action.shortcutGroup);
+      input.id = `${ZEN_CKS_INPUT_FIELD_CLASS}-${action.shortcutId}`;
+
+      if (shortcut?.toDisplayString?.() && !shortcut?.isEmpty?.()) {
+        input.value = shortcut.toDisplayString();
+      } else {
+        resetShortcutInputVisualState(input);
+      }
+
+      attachShortcutInputEvents(input, action);
+      insertShortcutRow(wrapper, row, action.shortcutGroup);
+    }
+  }
+
+  async function syncShortcutEditor() {
+    const wrapper = document.getElementById(ZEN_CKS_WRAPPER_ID);
+
+    if (!wrapper || !window.gZenCKSSettings) {
+      return false;
+    }
+
+    const ready = await ensureCustomShortcutDefinitions();
+
+    if (!ready) {
+      return false;
+    }
+
+    renderShortcutEditorRows();
+    return true;
+  }
+
+  function watchShortcutEditor() {
+    if (shortcutEditorObserver) {
+      return;
+    }
+
+    const tryInstallHook = () => {
+      const settings = window.gZenCKSSettings;
+
+      if (!settings || settings.__zenBrowserUtilitiesPatched) {
+        return Boolean(settings);
+      }
+
+      if (!Object.getOwnPropertyDescriptor(settings, '_hasSaved')) {
+        Object.defineProperty(settings, '_hasSaved', {
+          configurable: true,
+          enumerable: false,
+          get() {
+            return this['_has' + 'Safed'];
+          },
+          set(value) {
+            this['_has' + 'Safed'] = value;
+          },
+        });
+      }
+
+      const originalInitializeCKS = settings._initializeCKS.bind(settings);
+      settings._initializeCKS = async (...args) => {
+        await originalInitializeCKS(...args);
+        await syncShortcutEditor();
+      };
+      settings.__zenBrowserUtilitiesPatched = true;
+      return true;
+    };
+
+    const rerender = async () => {
+      if (!tryInstallHook()) {
+        return;
+      }
+
+      const synced = await syncShortcutEditor();
+
+      if (synced) {
+        shortcutEditorObserver?.disconnect();
+        shortcutEditorObserver = null;
+      }
+    };
+
+    shortcutEditorObserver = new MutationObserver(() => {
+      void rerender();
+    });
+    shortcutEditorObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+    rerender();
+    window.addEventListener('unload', () => {
+      shortcutEditorObserver?.disconnect();
+      shortcutEditorObserver = null;
+    }, { once: true });
+  }
+
+  function updateContextMenuSeparatorVisibility() {
+    const separator = document.getElementById(MENU_IDS.separator);
+
+    if (!separator) {
+      return;
+    }
+
+    const visibleCustomItems = CONTEXT_MENU_ACTIONS.some(action => {
+      const element = getContextMenuElement(action);
+      return element && !element.hidden;
+    });
+
+    separator.hidden = !visibleCustomItems;
+  }
+
+  function hideAllCustomContextMenuItems() {
+    for (const action of CONTEXT_MENU_ACTIONS) {
+      const element = getContextMenuElement(action);
+
+      if (element) {
+        element.hidden = true;
+      }
+    }
+
+    updateContextMenuSeparatorVisibility();
+  }
+
   const ACTION_HANDLERS = {
     moveToStart: () => moveTabsToBoundary('start'),
     moveToEnd: () => moveTabsToBoundary('end'),
@@ -875,11 +1470,11 @@ import {
   }
 
   function buildFolderMenu() {
-    const folderMenu = document.getElementById(MENU_IDS.moveToFolder);
+    const folderAction = ACTIONS_BY_ID.get('moveToFolderPrompt');
     const folders = getAvailableFolders();
 
     clearPopupChildren(MENU_IDS.moveToFolderPopup);
-    folderMenu.hidden = !folders.length;
+    setContextMenuActionHidden(folderAction, !folders.length);
 
     const popup = document.getElementById(MENU_IDS.moveToFolderPopup);
 
@@ -895,11 +1490,11 @@ import {
   }
 
   function buildWorkspaceMenu() {
-    const workspaceMenu = document.getElementById(MENU_IDS.moveToWorkspace);
+    const workspaceAction = ACTIONS_BY_ID.get('moveToWorkspacePrompt');
     const workspaces = getAvailableWorkspaces();
 
     clearPopupChildren(MENU_IDS.moveToWorkspacePopup);
-    workspaceMenu.hidden = workspaces.length < 1;
+    setContextMenuActionHidden(workspaceAction, workspaces.length < 1);
 
     const popup = document.getElementById(MENU_IDS.moveToWorkspacePopup);
 
@@ -918,6 +1513,7 @@ import {
     const contextTab = getContextTab();
 
     if (!contextTab) {
+      hideAllCustomContextMenuItems();
       return;
     }
 
@@ -932,18 +1528,44 @@ import {
       selectedIds
     );
 
-    document.getElementById(MENU_IDS.closeTabsAbove).hidden = !aboveTabs.length;
-    document.getElementById(MENU_IDS.closeTabsBelow).hidden = !belowTabs.length;
-    document.getElementById(MENU_IDS.moveOutOfFolder).hidden = !getCurrentFolder(contextTab);
-    document.getElementById(MENU_IDS.duplicatePinnedBelow).hidden =
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('moveToStart'), false);
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('moveToEnd'), false);
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('createNewFolder'), false);
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('closeTabsAbove'), !aboveTabs.length);
+    setContextMenuActionHidden(ACTIONS_BY_ID.get('closeTabsBelow'), !belowTabs.length);
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('copySelectedTabUrls'),
+      false
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('pasteTabUrls'),
+      false
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('pasteTabUrlsCsv'),
+      false
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('moveOutOfFolder'),
+      !getCurrentFolder(contextTab)
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('duplicatePinnedBelow'),
       !getSelectedPinnedTabs().length ||
-      getSelectedPinnedTabs().length !== getContextTabs().length;
-    document.getElementById(MENU_IDS.closeStaleTabs).hidden = !collectStaleTabs().length;
-    document.getElementById(MENU_IDS.replacePinnedUrlWithCurrent).hidden =
-      !getCurrentTabUrl() || !getSelectedPinnedTabs().length;
+      getSelectedPinnedTabs().length !== getContextTabs().length
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('closeStaleTabs'),
+      !collectStaleTabs().length
+    );
+    setContextMenuActionHidden(
+      ACTIONS_BY_ID.get('replacePinnedUrlWithCurrent'),
+      !getCurrentTabUrl() || !getSelectedPinnedTabs().length
+    );
 
     buildFolderMenu();
     buildWorkspaceMenu();
+    updateContextMenuSeparatorVisibility();
   }
 
   function installContextMenu() {
@@ -1037,11 +1659,31 @@ import {
   }
 
   function init() {
-    window.addEventListener('keydown', onKeyDown, true);
-    installContextMenu();
-    window.setInterval(() => {
-      void maybeRunStaleTabsSweep();
-    }, STALE_MONITOR_INTERVAL_MS);
+    if (isBrowserPage()) {
+      installKeyboardFallback();
+      installShortcutCommands();
+      void ensureCustomShortcutDefinitions().then(ready => {
+        if (ready) {
+          removeKeyboardFallback();
+        }
+      });
+      window.addEventListener('ZenKeyboardShortcutsReady', () => {
+        void ensureCustomShortcutDefinitions().then(ready => {
+          if (ready) {
+            removeKeyboardFallback();
+          }
+        });
+      }, { once: true });
+      installContextMenu();
+      window.setInterval(() => {
+        void maybeRunStaleTabsSweep();
+      }, STALE_MONITOR_INTERVAL_MS);
+      return;
+    }
+
+    if (isPreferencesPage()) {
+      watchShortcutEditor();
+    }
   }
 
   if (document.readyState === 'loading') {

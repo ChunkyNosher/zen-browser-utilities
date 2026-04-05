@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import {
   eventToShortcut,
   normalizeShortcut,
+  parseShortcutBinding,
   shortcutMatchesEvent,
 } from '../src/shortcut-utils.js';
 
@@ -62,5 +63,47 @@ describe('shortcut-utils', () => {
         key: '+',
       })
     ).toBe('Control+Plus');
+  });
+
+  test('parses legacy shortcut strings into Zen-compatible bindings', () => {
+    expect(parseShortcutBinding('alt+shift+home')).toEqual({
+      key: '',
+      keycode: 'VK_HOME',
+      modifiers: {
+        control: false,
+        alt: true,
+        shift: true,
+        meta: false,
+        accel: false,
+      },
+    });
+  });
+
+  test('maps control to accel outside macOS when parsing bindings', () => {
+    expect(parseShortcutBinding('ctrl+shift+d')).toEqual({
+      key: 'D',
+      keycode: '',
+      modifiers: {
+        control: false,
+        alt: false,
+        shift: true,
+        meta: false,
+        accel: true,
+      },
+    });
+  });
+
+  test('preserves control on macOS when parsing bindings', () => {
+    expect(parseShortcutBinding('ctrl+shift+d', { isMac: true })).toEqual({
+      key: 'D',
+      keycode: '',
+      modifiers: {
+        control: true,
+        alt: false,
+        shift: true,
+        meta: false,
+        accel: false,
+      },
+    });
   });
 });
