@@ -222,6 +222,24 @@
 		if (!Array.isArray(entries) || maxEntries < 1) return [];
 		return entries.slice(-maxEntries);
 	}
+	/**
+	* Build the JSON payload written by the debug-log export action.
+	*
+	* @param {object} options
+	* @param {string} options.exportedAt ISO timestamp for when the export was created.
+	* @param {string} options.pageUrl Browser chrome/settings page that created the export.
+	* @param {Array<object>} [options.entries=[]] Normalized in-memory debug log entries.
+	* @param {Array<object>} [options.actions=[]] Shortcut/action metadata included for support.
+	* @param {object} [options.preferences={}] Relevant user-configurable preference values.
+	* @returns {{
+	*   exportedAt: string,
+	*   pageUrl: string,
+	*   entryCount: number,
+	*   entries: Array<object>,
+	*   actions: Array<object>,
+	*   preferences: object
+	* }} Snapshot payload suitable for JSON export.
+	*/
 	function createDebugSnapshot({ exportedAt, pageUrl, entries = [], actions = [], preferences = {} }) {
 		return {
 			exportedAt,
@@ -575,6 +593,15 @@
 				return JSON.parse(JSON.stringify(details));
 			} catch {
 				return String(details);
+			}
+		}
+		function sanitizeUrlForDebug(url) {
+			if (!url) return "";
+			try {
+				const parsed = new URL(url);
+				return `${parsed.origin}${parsed.pathname}`;
+			} catch {
+				return String(url).split(/[?#]/, 1)[0];
 			}
 		}
 		function appendDebugEntry(level, message, details = null, force = false) {
@@ -1050,7 +1077,7 @@
 			if (!newTab.pinned) gBrowser.pinTab(newTab);
 			moveNode(newTab, sourceTab.parentElement, sourceTab.nextElementSibling);
 			logDebug("Opened link below pinned tab from webpage context menu.", {
-				url,
+				url: sanitizeUrlForDebug(url),
 				sourceTabId: sourceTab.getAttribute?.("id") || "",
 				workspaceId: workspace?.uuid || ""
 			});
@@ -1067,7 +1094,7 @@
 			folder.addTabs([newTab]);
 			gBrowser.selectedTab = newTab;
 			logDebug("Opened link into folder from webpage context menu.", {
-				url,
+				url: sanitizeUrlForDebug(url),
 				folderId: folder.id,
 				workspaceId: destinationWorkspace?.uuid || ""
 			});
@@ -1082,7 +1109,7 @@
 			gZenWorkspaces?.changeWorkspaceWithID?.(workspace.uuid);
 			gBrowser.selectedTab = newTab;
 			logDebug("Opened link into workspace from webpage context menu.", {
-				url,
+				url: sanitizeUrlForDebug(url),
 				workspaceId: workspace.uuid
 			});
 			return true;
@@ -1399,7 +1426,7 @@
 			if (!picker) return false;
 			const { IOUtils } = ChromeUtils.importESModule("resource://gre/modules/IOUtils.sys.mjs");
 			const filenameTimestamp = (/* @__PURE__ */ new Date()).toISOString().replaceAll(":", "-");
-			picker.init(window, "Export Zen Browser Utilities debug log", Ci.nsIFilePicker.modeSave);
+			picker.init(window, "Export Zen Browser Utilities debug log (may contain support details)", Ci.nsIFilePicker.modeSave);
 			picker.defaultString = `zen-browser-utilities-debug-log-${filenameTimestamp}.json`;
 			picker.defaultExtension = "json";
 			picker.appendFilter("JSON", "*.json");
@@ -1427,7 +1454,7 @@
 			panel.id = DEBUG_LOG_EXPORT_PANEL_ID;
 			panel.setAttribute("style", "margin-bottom: 12px; gap: 6px;");
 			const description = document.createXULElement("description");
-			description.textContent = "Enable debug logging from the mod preferences, then use this button to export the collected Zen Browser Utilities log as JSON.";
+			description.textContent = "Enable debug logging from the mod preferences, then use this button to export the collected Zen Browser Utilities log as JSON. Review the file before sharing because it may include support details such as browser, tab, and sanitized link URLs.";
 			const button = document.createXULElement("button");
 			button.id = DEBUG_LOG_EXPORT_BUTTON_ID;
 			button.setAttribute("label", "Export Zen Browser Utilities Debug Log");
@@ -1725,7 +1752,7 @@
 			if (document.getElementById(MENU_IDS.linkSeparator)) return;
 			const fragment = MozXULElement.parseXULToFragment(`
       <menuseparator id="${MENU_IDS.linkSeparator}" hidden="true" />
-      <menuitem id="${MENU_IDS.openLinkBelowPinned}" label="Open Link Below This Pinned Tab" hidden="true" />
+      <menuitem id="${MENU_IDS.openLinkBelowPinned}" label="Open Link Below Current Pinned Tab" hidden="true" />
       <menu id="${MENU_IDS.openLinkToFolder}" label="Open Link in Folder" hidden="true">
         <menupopup id="${MENU_IDS.openLinkToFolderPopup}" />
       </menu>

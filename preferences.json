@@ -85,7 +85,7 @@
   },
   {
     "property": "zen-browser-utilities.linkContextMenu.openBelowPinned",
-    "label": "Show “Open Link Below This Pinned Tab” in the webpage link right-click context menu",
+    "label": "Show “Open Link Below Current Pinned Tab” in the webpage link right-click context menu",
     "type": "checkbox",
     "defaultValue": true
   },

@@ -170,6 +170,19 @@ import {
     }
   }
 
+  function sanitizeUrlForDebug(url) {
+    if (!url) {
+      return '';
+    }
+
+    try {
+      const parsed = new URL(url);
+      return `${parsed.origin}${parsed.pathname}`;
+    } catch {
+      return String(url).split(/[?#]/, 1)[0];
+    }
+  }
+
   function appendDebugEntry(level, message, details = null, force = false) {
     if (!force && !isDebugLoggingEnabled()) {
       return;
@@ -1037,7 +1050,7 @@ import {
 
     moveNode(newTab, sourceTab.parentElement, sourceTab.nextElementSibling);
     logDebug('Opened link below pinned tab from webpage context menu.', {
-      url,
+      url: sanitizeUrlForDebug(url),
       sourceTabId: sourceTab.getAttribute?.('id') || '',
       workspaceId: workspace?.uuid || '',
     });
@@ -1067,7 +1080,7 @@ import {
     folder.addTabs([newTab]);
     gBrowser.selectedTab = newTab;
     logDebug('Opened link into folder from webpage context menu.', {
-      url,
+      url: sanitizeUrlForDebug(url),
       folderId: folder.id,
       workspaceId: destinationWorkspace?.uuid || '',
     });
@@ -1091,7 +1104,7 @@ import {
     gZenWorkspaces?.changeWorkspaceWithID?.(workspace.uuid);
     gBrowser.selectedTab = newTab;
     logDebug('Opened link into workspace from webpage context menu.', {
-      url,
+      url: sanitizeUrlForDebug(url),
       workspaceId: workspace.uuid,
     });
     return true;
@@ -1591,7 +1604,11 @@ import {
 
     const { IOUtils } = ChromeUtils.importESModule('resource://gre/modules/IOUtils.sys.mjs');
     const filenameTimestamp = new Date().toISOString().replaceAll(':', '-');
-    picker.init(window, 'Export Zen Browser Utilities debug log', Ci.nsIFilePicker.modeSave);
+    picker.init(
+      window,
+      'Export Zen Browser Utilities debug log (may contain support details)',
+      Ci.nsIFilePicker.modeSave
+    );
     picker.defaultString = `zen-browser-utilities-debug-log-${filenameTimestamp}.json`;
     picker.defaultExtension = 'json';
     picker.appendFilter('JSON', '*.json');
@@ -1635,7 +1652,7 @@ import {
 
     const description = document.createXULElement('description');
     description.textContent =
-      'Enable debug logging from the mod preferences, then use this button to export the collected Zen Browser Utilities log as JSON.';
+      'Enable debug logging from the mod preferences, then use this button to export the collected Zen Browser Utilities log as JSON. Review the file before sharing because it may include support details such as browser, tab, and sanitized link URLs.';
 
     const button = document.createXULElement('button');
     button.id = DEBUG_LOG_EXPORT_BUTTON_ID;
@@ -2115,7 +2132,7 @@ import {
 
     const fragment = MozXULElement.parseXULToFragment(`
       <menuseparator id="${MENU_IDS.linkSeparator}" hidden="true" />
-      <menuitem id="${MENU_IDS.openLinkBelowPinned}" label="Open Link Below This Pinned Tab" hidden="true" />
+      <menuitem id="${MENU_IDS.openLinkBelowPinned}" label="Open Link Below Current Pinned Tab" hidden="true" />
       <menu id="${MENU_IDS.openLinkToFolder}" label="Open Link in Folder" hidden="true">
         <menupopup id="${MENU_IDS.openLinkToFolderPopup}" />
       </menu>
