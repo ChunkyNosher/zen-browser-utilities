@@ -2,8 +2,8 @@
 Services,
 SessionStore,
 TabContextMenu,
-gContextMenu,
 gBrowser,
+gContextMenu,
 gZenFolders,
 gZenWorkspaces,
 MozXULElement,
@@ -2156,7 +2156,7 @@ import {
 
       const retryDelayMs = Math.min(
         LINK_CONTEXT_MENU_RETRY_BASE_MS * 2 ** linkContextMenuInstallAttempts,
-        5_000
+        5000
       );
       linkContextMenuInstallAttempts += 1;
       setTimeout(installLinkContextMenu, retryDelayMs);
