@@ -14,6 +14,9 @@ This mod currently adds native-tab-menu integrations and optional keyboard short
 - Move the current tab selection into another folder
 - Move the current tab selection out of the current folder
 - Duplicate a pinned tab directly below the original pinned tab
+- Open a right-clicked webpage link directly below the current pinned tab
+- Open a right-clicked webpage link into another folder
+- Open a right-clicked webpage link into another Zen space using that space's assigned Firefox container
 - Replace pinned URL with Current
 - Re-open the current tab selection inside another Zen space using that space's assigned Firefox container
 - Copy all selected tab links as newline-delimited URLs
@@ -35,12 +38,13 @@ This mod does **not** create a custom right-click menu.
 
 It plugs into Zen Browser's existing tab context menu hook:
 
-- Zen Browser augments the native tab menu in [`src/zen/tabs/ZenPinnedTabManager.mjs`](https://github.com/zen-browser/desktop/blob/main/src/zen/tabs/ZenPinnedTabManager.mjs), where `_insertItemsIntoTabContextMenu()` appends custom items directly to `#tabContextMenu`.
+- Zen Browser augments the native tab menu in [`src/zen/tabs/ZenPinnedTabManager.mjs`](https://github.com/zen-browser/desktop/blob/dev/src/zen/tabs/ZenPinnedTabManager.mjs), where `_insertItemsIntoTabContextMenu()` appends custom items directly to `#tabContextMenu`.
 - Zen wires those native tab-menu updates from [`src/browser/components/tabbrowser/content/tabbrowser-js.patch`](https://github.com/zen-browser/desktop/blob/main/src/browser/components/tabbrowser/content/tabbrowser-js.patch), where `TabContextMenu` calls `gZenPinnedTabManager.updatePinnedTabContextMenu(this.contextTab)`.
 - Zen folder actions are also added into existing menus from [`src/zen/folders/ZenFolders.mjs`](https://github.com/zen-browser/desktop/blob/main/src/zen/folders/ZenFolders.mjs), which inserts `zen-context-menu-new-folder` into the stock tab menu flow.
+- Zen also patches the stock webpage context menu in [`src/browser/base/content/nsContextMenu-sys-mjs.patch`](https://github.com/zen-browser/desktop/blob/dev/src/browser/base/content/nsContextMenu-sys-mjs.patch), which shows extra link actions from `#contentAreaContextMenu` when `nsContextMenu` reports a real link target.
 - Zen tab lifecycle state exposes `lastAccessed` from the patched tab implementation in [`src/browser/components/tabbrowser/content/tab-js.patch`](https://github.com/zen-browser/desktop/blob/main/src/browser/components/tabbrowser/content/tab-js.patch), which this mod uses as the native inactivity signal for stale-tab cleanup.
 
-This repo follows that same approach by appending new entries to `#tabContextMenu` and updating them on `popupshowing`.
+This repo follows that same approach by appending new entries to `#tabContextMenu` and `#contentAreaContextMenu`, then updating them on `popupshowing`.
 
 ## Reference repositories
 
@@ -90,7 +94,9 @@ zen-browser-utilities.uc.js
 
 - Shortcut preferences default to blank strings so the mod does not claim any keyboard combinations until the user explicitly assigns them.
 - Shortcut assignments now live in Zen's native keyboard shortcut editor; any older Sine shortcut preference values are only used as one-time migration input for existing installs.
+- The mod now groups all of its custom shortcut rows under a single **Zen Browser Utilities** section at the top of Zen's native shortcut editor and replaces the broken fallback action-name rows that Zen would otherwise generate for unl10nized custom commands.
 - Folder and workspace destination actions are available in the native tab context menu, and the keyboard-triggered versions use a picker prompt so they remain assignable without inventing a separate context UI.
+- Webpage link context-menu actions are available when right-clicking a real link, including opening directly below the current pinned tab, into another folder, or into another space's container.
 - Bulk close operations use a configurable batch size and delay so closing hundreds of tabs does not try to remove them all at once.
 - Automatic stale-tab cleanup only targets unpinned inactive tabs and skips selected, multiselected, essential, busy, pending, and optionally audible tabs.
-- `preferences.json` now keeps only non-shortcut settings, including per-action toggles for which custom tab-context-menu entries should appear.
+- `preferences.json` now keeps only non-shortcut settings, including per-action toggles for the custom tab and link context-menu entries, plus a debug-logging toggle for the export button in Keyboard Shortcuts.

@@ -1,4 +1,4 @@
-/* global Services, SessionStore, TabContextMenu, gBrowser, gZenFolders, gZenWorkspaces, MozXULElement, ContextualIdentityService, Cc, Ci, ChromeUtils, AppConstants */
+/* global Services, SessionStore, TabContextMenu, gContextMenu, gBrowser, gZenFolders, gZenWorkspaces, MozXULElement, ContextualIdentityService, Cc, Ci, ChromeUtils, AppConstants */
 
 import {
   buildFolderChoices,
@@ -9,6 +9,7 @@ import {
 } from './action-model.js';
 import { ACTIONS, ACTIONS_BY_ID } from './action-definitions.js';
 import { chunkItems, parsePositiveInteger } from './batch-utils.js';
+import { createDebugSnapshot, limitDebugEntries } from './debug-utils.js';
 import {
   getSpecialKeycode,
   parseShortcutBinding,
@@ -39,6 +40,12 @@ import {
     pasteTabUrlsCsv: 'zen-browser-utilities-paste-tab-urls-csv',
     closeStaleTabs: 'zen-browser-utilities-close-stale-tabs',
     replacePinnedUrlWithCurrent: 'zen-browser-utilities-replace-pinned-url-with-current',
+    linkSeparator: 'zen-browser-utilities-link-context-separator',
+    openLinkBelowPinned: 'zen-browser-utilities-open-link-below-pinned',
+    openLinkToFolder: 'zen-browser-utilities-open-link-to-folder',
+    openLinkToFolderPopup: 'zen-browser-utilities-open-link-to-folder-popup',
+    openLinkToWorkspace: 'zen-browser-utilities-open-link-to-workspace',
+    openLinkToWorkspacePopup: 'zen-browser-utilities-open-link-to-workspace-popup',
   };
 
   const PROMPT_TITLES = {
@@ -53,17 +60,39 @@ import {
   const BROWSER_URL = 'chrome://browser/content/browser.xhtml';
   const CUSTOM_COMMANDSET_ID = 'zen-browser-utilities-commandset';
   const CUSTOM_SHORTCUT_ROW_ATTRIBUTE = 'data-zen-browser-utilities-shortcut';
+  const CUSTOM_SHORTCUT_GROUP_ATTRIBUTE = 'data-zen-browser-utilities-shortcut-group';
+  const CUSTOM_SHORTCUT_GROUP_ID = 'zen-browser-utilities-shortcut-group';
   const ZEN_CKS_CLASS_BASE = 'zenCKSOption';
   const ZEN_CKS_INPUT_FIELD_CLASS = `${ZEN_CKS_CLASS_BASE}-input`;
   const ZEN_CKS_LABEL_CLASS = `${ZEN_CKS_CLASS_BASE}-label`;
   const ZEN_CKS_WRAPPER_ID = `${ZEN_CKS_CLASS_BASE}-wrapper`;
-  const ZEN_CKS_GROUP_PREFIX = `${ZEN_CKS_CLASS_BASE}-group`;
   const KEYBIND_ATTRIBUTE_KEY = 'key';
   const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
   const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
+  const DEBUG_LOG_MAX_ENTRIES = 500;
+  const DEBUG_LOG_EXPORT_BUTTON_ID = 'zen-browser-utilities-export-debug-log';
+  const DEBUG_LOG_EXPORT_PANEL_ID = 'zen-browser-utilities-export-debug-panel';
+  const DEBUG_LOG_PREF = 'zen-browser-utilities.debug.enabled';
   const CONTEXT_MENU_ACTIONS = ACTIONS.filter(
     action => action.contextMenuPrefKey && action.contextMenuMenuId
   );
+  const LINK_CONTEXT_ACTIONS = [
+    {
+      id: 'openLinkBelowPinned',
+      prefKey: 'zen-browser-utilities.linkContextMenu.openBelowPinned',
+      menuId: MENU_IDS.openLinkBelowPinned,
+    },
+    {
+      id: 'openLinkToFolder',
+      prefKey: 'zen-browser-utilities.linkContextMenu.openToFolder',
+      menuId: MENU_IDS.openLinkToFolder,
+    },
+    {
+      id: 'openLinkToWorkspace',
+      prefKey: 'zen-browser-utilities.linkContextMenu.openToWorkspace',
+      menuId: MENU_IDS.openLinkToWorkspace,
+    },
+  ];
   const KEYCODE_DISPLAY_NAMES = new Map([
     ['VK_BACK', 'Backspace'],
     ['VK_DELETE', 'Delete'],
@@ -107,8 +136,66 @@ import {
   let lastStaleSweepAt = 0;
   let keyboardFallbackInstalled = false;
   let shortcutEditorObserver = null;
+  let debugEntries = [];
+
+  function isDebugLoggingEnabled() {
+    try {
+      return Services.prefs.getBoolPref(DEBUG_LOG_PREF, false);
+    } catch {
+      return false;
+    }
+  }
+
+  function normalizeDebugDetails(details) {
+    if (!details) {
+      return null;
+    }
+
+    if (details instanceof Error) {
+      return {
+        name: details.name,
+        message: details.message,
+        stack: details.stack || '',
+      };
+    }
+
+    if (typeof details === 'string') {
+      return details;
+    }
+
+    try {
+      return JSON.parse(JSON.stringify(details));
+    } catch {
+      return String(details);
+    }
+  }
+
+  function appendDebugEntry(level, message, details = null, force = false) {
+    if (!force && !isDebugLoggingEnabled()) {
+      return;
+    }
+
+    debugEntries = limitDebugEntries(
+      [
+        ...debugEntries,
+        {
+          timestamp: new Date().toISOString(),
+          level,
+          message,
+          page: window.location.href,
+          details: normalizeDebugDetails(details),
+        },
+      ],
+      DEBUG_LOG_MAX_ENTRIES
+    );
+  }
+
+  function logDebug(message, details = null) {
+    appendDebugEntry('debug', message, details);
+  }
 
   function logError(error) {
+    appendDebugEntry('error', 'Unhandled Zen Browser Utilities error', error, true);
     console.error('Zen Browser Utilities:', error);
   }
 
@@ -167,6 +254,10 @@ import {
     return document.getElementById(MENU_IDS[action.contextMenuMenuId]) || null;
   }
 
+  function getMenuElementById(menuId) {
+    return document.getElementById(menuId) || null;
+  }
+
   function isContextMenuActionEnabled(action) {
     return getBoolPref(action.contextMenuPrefKey, true);
   }
@@ -217,6 +308,10 @@ import {
 
   function getContextTab() {
     return TabContextMenu?.contextTab || gBrowser?.selectedTab || null;
+  }
+
+  function getActiveBrowserTab() {
+    return gBrowser?.selectedTab || null;
   }
 
   function getContextTabs() {
@@ -485,6 +580,12 @@ import {
       gZenWorkspaces?.activeWorkspace ||
       ''
     );
+  }
+
+  function getWorkspaceById(workspaceId) {
+    return (gZenWorkspaces?.getWorkspaces?.() || []).find(
+      workspace => workspace.uuid === workspaceId
+    ) || null;
   }
 
   function getFolderLabel(folder) {
@@ -802,11 +903,8 @@ import {
     return writeClipboardText(urls.join('\n'));
   }
 
-  function getDestinationWorkspace() {
-    const workspaceId = getWorkspaceIdForNode(getContextTab());
-    return (gZenWorkspaces?.getWorkspaces?.() || []).find(
-      workspace => workspace.uuid === workspaceId
-    );
+  function getDestinationWorkspace(tab = getContextTab()) {
+    return getWorkspaceById(getWorkspaceIdForNode(tab));
   }
 
   function createTabsInCurrentContext(urls) {
@@ -854,6 +952,149 @@ import {
     }
 
     return createdTabs.length > 0;
+  }
+
+  function getContextLinkUrl() {
+    return (
+      gContextMenu?.linkURL ||
+      gContextMenu?.linkURI?.spec ||
+      gContextMenu?.linkURI?.displaySpec ||
+      ''
+    );
+  }
+
+  function isLinkContextMenuActive() {
+    return Boolean(
+      gContextMenu?.onLink &&
+      !gContextMenu?.onMailtoLink &&
+      !gContextMenu?.onTelLink &&
+      getContextLinkUrl()
+    );
+  }
+
+  function getAvailableFoldersForLinkContext() {
+    return getAvailableFolders(getActiveBrowserTab());
+  }
+
+  function getAvailableWorkspacesForLinkContext() {
+    const currentWorkspaceId = getWorkspaceIdForNode(getActiveBrowserTab());
+
+    return buildWorkspaceChoices(
+      (gZenWorkspaces?.getWorkspaces?.() || []).map(workspace => ({
+        id: workspace.uuid,
+        label: getWorkspaceLabel(workspace),
+        workspace,
+      })),
+      currentWorkspaceId
+    ).map(choice => ({
+      ...choice,
+      workspace: getWorkspaceById(choice.id),
+    }));
+  }
+
+  function createNewTabForDestination(url, destinationWorkspace = null) {
+    const fixedUrl = normalizeUrlForOpen(url);
+
+    if (!fixedUrl) {
+      return null;
+    }
+
+    const newTab = gBrowser.addTrustedTab(fixedUrl, {
+      inBackground: true,
+      userContextId:
+        typeof destinationWorkspace?.containerTabId === 'number'
+          ? destinationWorkspace.containerTabId
+          : 0,
+      triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+    });
+
+    if (destinationWorkspace?.uuid) {
+      gZenWorkspaces?.moveTabToWorkspace?.(newTab, destinationWorkspace.uuid);
+      newTab.setAttribute('zen-workspace-id', destinationWorkspace.uuid);
+    }
+
+    return newTab;
+  }
+
+  function openLinkBelowPinnedTab() {
+    const sourceTab = getActiveBrowserTab();
+    const url = getContextLinkUrl();
+
+    if (!sourceTab?.pinned || !url) {
+      return false;
+    }
+
+    const workspace = getDestinationWorkspace(sourceTab);
+    const newTab = createNewTabForDestination(url, workspace);
+
+    if (!newTab) {
+      return false;
+    }
+
+    if (!newTab.pinned) {
+      gBrowser.pinTab(newTab);
+    }
+
+    moveNode(newTab, sourceTab.parentElement, sourceTab.nextElementSibling);
+    logDebug('Opened link below pinned tab from webpage context menu.', {
+      url,
+      sourceTabId: sourceTab.getAttribute?.('id') || '',
+      workspaceId: workspace?.uuid || '',
+    });
+    return true;
+  }
+
+  function openLinkInFolder(folder) {
+    const url = getContextLinkUrl();
+    const destinationWorkspace = getWorkspaceById(getWorkspaceIdForNode(folder));
+
+    if (!folder || !url) {
+      return false;
+    }
+
+    const newTab = createNewTabForDestination(url, destinationWorkspace);
+
+    if (!newTab) {
+      return false;
+    }
+
+    if (folder.pinned && !newTab.pinned) {
+      gBrowser.pinTab(newTab);
+    } else if (!folder.pinned && newTab.pinned) {
+      gBrowser.unpinTab(newTab);
+    }
+
+    folder.addTabs([newTab]);
+    gBrowser.selectedTab = newTab;
+    logDebug('Opened link into folder from webpage context menu.', {
+      url,
+      folderId: folder.id,
+      workspaceId: destinationWorkspace?.uuid || '',
+    });
+    return true;
+  }
+
+  function openLinkInWorkspace(workspaceId) {
+    const url = getContextLinkUrl();
+    const workspace = getWorkspaceById(workspaceId);
+
+    if (!url || !workspace) {
+      return false;
+    }
+
+    const newTab = createNewTabForDestination(url, workspace);
+
+    if (!newTab) {
+      return false;
+    }
+
+    gZenWorkspaces?.changeWorkspaceWithID?.(workspace.uuid);
+    gBrowser.selectedTab = newTab;
+    logDebug('Opened link into workspace from webpage context menu.', {
+      url,
+      workspaceId: workspace.uuid,
+    });
+    return true;
   }
 
   async function pasteTabUrls() {
@@ -1185,6 +1426,14 @@ import {
     return fragment.firstElementChild;
   }
 
+  function getCustomShortcutInputId(action) {
+    return `${ZEN_CKS_INPUT_FIELD_CLASS}-${action.shortcutId}-zen-browser-utilities`;
+  }
+
+  function getNativeShortcutInputId(action) {
+    return `${ZEN_CKS_INPUT_FIELD_CLASS}-${action.shortcutId}`;
+  }
+
   function attachShortcutInputEvents(input, action) {
     input.addEventListener('focus', event => {
       const settings = window.gZenCKSSettings;
@@ -1230,28 +1479,39 @@ import {
     });
   }
 
-  function insertShortcutRow(wrapper, row, group) {
-    const groupHeader = wrapper.querySelector(
-      `[data-group="${ZEN_CKS_GROUP_PREFIX}-${group}"]`
-    );
+  function ensureCustomShortcutGroup(wrapper) {
+    let header = document.getElementById(CUSTOM_SHORTCUT_GROUP_ID);
 
-    if (!groupHeader) {
-      wrapper.appendChild(row);
-      return;
+    if (!header) {
+      header = document.createElement('h2');
+      header.id = CUSTOM_SHORTCUT_GROUP_ID;
+      header.setAttribute(CUSTOM_SHORTCUT_GROUP_ATTRIBUTE, 'true');
+      header.textContent = 'Zen Browser Utilities';
     }
 
-    let insertBefore = groupHeader.nextSibling;
+    wrapper.prepend(header);
+    return header;
+  }
 
-    while (insertBefore?.matches?.(`.${ZEN_CKS_CLASS_BASE}`)) {
-      insertBefore = insertBefore.nextSibling;
+  function removeNativeShortcutRows(wrapper) {
+    for (const action of ACTIONS) {
+      const input = wrapper.querySelector(`#${getNativeShortcutInputId(action)}`);
+      input?.closest(`.${ZEN_CKS_CLASS_BASE}`)?.remove();
+    }
+  }
+
+  function insertShortcutRow(wrapper, row) {
+    const groupHeader = ensureCustomShortcutGroup(wrapper);
+    let insertAfter = groupHeader;
+
+    while (
+      insertAfter.nextSibling?.nodeType === Node.ELEMENT_NODE &&
+      insertAfter.nextSibling?.getAttribute?.(CUSTOM_SHORTCUT_ROW_ATTRIBUTE) === 'true'
+    ) {
+      insertAfter = insertAfter.nextSibling;
     }
 
-    if (insertBefore) {
-      wrapper.insertBefore(row, insertBefore);
-      return;
-    }
-
-    wrapper.appendChild(row);
+    insertAfter.after(row);
   }
 
   function renderShortcutEditorRows() {
@@ -1264,6 +1524,8 @@ import {
     wrapper.querySelectorAll(`[${CUSTOM_SHORTCUT_ROW_ATTRIBUTE}="true"]`).forEach(node => {
       node.remove();
     });
+    removeNativeShortcutRows(wrapper);
+    ensureCustomShortcutGroup(wrapper);
 
     for (const action of ACTIONS) {
       const shortcut = getCustomShortcutFromManager(action);
@@ -1274,8 +1536,8 @@ import {
       label.textContent = action.label;
       input.setAttribute(KEYBIND_ATTRIBUTE_KEY, action.shortcutId);
       input.setAttribute('data-id', action.shortcutId);
-      input.setAttribute('data-group', action.shortcutGroup);
-      input.id = `${ZEN_CKS_INPUT_FIELD_CLASS}-${action.shortcutId}`;
+      input.setAttribute('data-group', CUSTOM_SHORTCUT_GROUP_ID);
+      input.id = getCustomShortcutInputId(action);
 
       if (shortcut?.toDisplayString?.() && !shortcut?.isEmpty?.()) {
         input.value = shortcut.toDisplayString();
@@ -1284,7 +1546,7 @@ import {
       }
 
       attachShortcutInputEvents(input, action);
-      insertShortcutRow(wrapper, row, action.shortcutGroup);
+      insertShortcutRow(wrapper, row);
     }
   }
 
@@ -1303,6 +1565,91 @@ import {
 
     renderShortcutEditorRows();
     return true;
+  }
+
+  function getDebugExportButtonContainer() {
+    return document.getElementById(ZEN_CKS_WRAPPER_ID)?.parentElement || null;
+  }
+
+  function getRelevantPreferenceSnapshot() {
+    return {
+      debugEnabled: getBoolPref(DEBUG_LOG_PREF, false),
+      closeBatchSize: getStringPref('zen-browser-utilities.close.batchSize'),
+      closeBatchDelayMs: getStringPref('zen-browser-utilities.close.batchDelayMs'),
+      staleAutoCloseEnabled: getBoolPref('zen-browser-utilities.stale.autoCloseEnabled', false),
+      staleMaxAgeMinutes: getStringPref('zen-browser-utilities.stale.maxAgeMinutes'),
+      staleCheckIntervalMinutes: getStringPref('zen-browser-utilities.stale.checkIntervalMinutes'),
+    };
+  }
+
+  async function exportDebugLog() {
+    const picker = Cc['@mozilla.org/filepicker;1']?.createInstance?.(Ci.nsIFilePicker);
+
+    if (!picker) {
+      return false;
+    }
+
+    const { IOUtils } = ChromeUtils.importESModule('resource://gre/modules/IOUtils.sys.mjs');
+    const filenameTimestamp = new Date().toISOString().replaceAll(':', '-');
+    picker.init(window, 'Export Zen Browser Utilities debug log', Ci.nsIFilePicker.modeSave);
+    picker.defaultString = `zen-browser-utilities-debug-log-${filenameTimestamp}.json`;
+    picker.defaultExtension = 'json';
+    picker.appendFilter('JSON', '*.json');
+
+    const result = await picker.open();
+
+    if (
+      result !== Ci.nsIFilePicker.returnOK &&
+      result !== Ci.nsIFilePicker.returnReplace
+    ) {
+      return false;
+    }
+
+    const snapshot = createDebugSnapshot({
+      exportedAt: new Date().toISOString(),
+      pageUrl: window.location.href,
+      entries: debugEntries,
+      actions: ACTIONS.map(action => ({
+        id: action.id,
+        label: action.label,
+        shortcut: getStringPref(action.prefKey),
+      })),
+      preferences: getRelevantPreferenceSnapshot(),
+    });
+
+    await IOUtils.writeUTF8(picker.file.path, `${JSON.stringify(snapshot, null, 2)}\n`);
+    logDebug('Exported debug log to file.', { path: picker.file.path });
+    return true;
+  }
+
+  function installDebugExportButton() {
+    const container = getDebugExportButtonContainer();
+
+    if (!container || document.getElementById(DEBUG_LOG_EXPORT_PANEL_ID)) {
+      return;
+    }
+
+    const panel = document.createXULElement('vbox');
+    panel.id = DEBUG_LOG_EXPORT_PANEL_ID;
+    panel.setAttribute('style', 'margin-bottom: 12px; gap: 6px;');
+
+    const description = document.createXULElement('description');
+    description.textContent =
+      'Enable debug logging from the mod preferences, then use this button to export the collected Zen Browser Utilities log as JSON.';
+
+    const button = document.createXULElement('button');
+    button.id = DEBUG_LOG_EXPORT_BUTTON_ID;
+    button.setAttribute('label', 'Export Zen Browser Utilities Debug Log');
+    button.addEventListener('command', async () => {
+      try {
+        await exportDebugLog();
+      } catch (error) {
+        logError(error);
+      }
+    });
+
+    panel.append(description, button);
+    container.insertBefore(panel, container.firstChild);
   }
 
   function watchShortcutEditor() {
@@ -1334,6 +1681,7 @@ import {
       settings._initializeCKS = async (...args) => {
         await originalInitializeCKS(...args);
         await syncShortcutEditor();
+        installDebugExportButton();
       };
       settings.__zenBrowserUtilitiesPatched = true;
       return true;
@@ -1347,6 +1695,7 @@ import {
       const synced = await syncShortcutEditor();
 
       if (synced) {
+        installDebugExportButton();
         shortcutEditorObserver?.disconnect();
         shortcutEditorObserver = null;
       }
@@ -1381,6 +1730,21 @@ import {
     separator.hidden = !visibleCustomItems;
   }
 
+  function updateLinkContextMenuSeparatorVisibility() {
+    const separator = document.getElementById(MENU_IDS.linkSeparator);
+
+    if (!separator) {
+      return;
+    }
+
+    const visibleCustomItems = LINK_CONTEXT_ACTIONS.some(action => {
+      const element = getMenuElementById(action.menuId);
+      return element && !element.hidden;
+    });
+
+    separator.hidden = !visibleCustomItems;
+  }
+
   function hideAllCustomContextMenuItems() {
     for (const action of CONTEXT_MENU_ACTIONS) {
       const element = getContextMenuElement(action);
@@ -1391,6 +1755,30 @@ import {
     }
 
     updateContextMenuSeparatorVisibility();
+  }
+
+  function setLinkContextActionHidden(action, hidden) {
+    if (!action) {
+      return;
+    }
+
+    const element = getMenuElementById(action.menuId);
+
+    if (element) {
+      element.hidden = hidden || !getBoolPref(action.prefKey, true);
+    }
+  }
+
+  function hideAllLinkContextMenuItems() {
+    for (const action of LINK_CONTEXT_ACTIONS) {
+      const element = getMenuElementById(action.menuId);
+
+      if (element) {
+        element.hidden = true;
+      }
+    }
+
+    updateLinkContextMenuSeparatorVisibility();
   }
 
   const ACTION_HANDLERS = {
@@ -1419,6 +1807,7 @@ import {
     }
 
     try {
+      logDebug('Executing action.', { actionId });
       return await handler();
     } catch (error) {
       logError(error);
@@ -1509,6 +1898,44 @@ import {
     }
   }
 
+  function buildLinkFolderMenu() {
+    clearPopupChildren(MENU_IDS.openLinkToFolderPopup);
+    const folders = getAvailableFoldersForLinkContext();
+    const popup = document.getElementById(MENU_IDS.openLinkToFolderPopup);
+    const action = LINK_CONTEXT_ACTIONS.find(item => item.id === 'openLinkToFolder');
+
+    setLinkContextActionHidden(action, !folders.length);
+
+    for (const folder of folders) {
+      const item = document.createXULElement('menuitem');
+      item.setAttribute('label', folder.label);
+      item.dataset.folderId = folder.id;
+      item.addEventListener('command', () => {
+        void openLinkInFolder(folder.folder);
+      });
+      popup?.appendChild(item);
+    }
+  }
+
+  function buildLinkWorkspaceMenu() {
+    clearPopupChildren(MENU_IDS.openLinkToWorkspacePopup);
+    const workspaces = getAvailableWorkspacesForLinkContext();
+    const popup = document.getElementById(MENU_IDS.openLinkToWorkspacePopup);
+    const action = LINK_CONTEXT_ACTIONS.find(item => item.id === 'openLinkToWorkspace');
+
+    setLinkContextActionHidden(action, !workspaces.length);
+
+    for (const workspace of workspaces) {
+      const item = document.createXULElement('menuitem');
+      item.setAttribute('label', workspace.label);
+      item.dataset.workspaceId = workspace.id;
+      item.addEventListener('command', () => {
+        void openLinkInWorkspace(workspace.id);
+      });
+      popup?.appendChild(item);
+    }
+  }
+
   function updateMenuVisibility() {
     const contextTab = getContextTab();
 
@@ -1566,6 +1993,21 @@ import {
     buildFolderMenu();
     buildWorkspaceMenu();
     updateContextMenuSeparatorVisibility();
+  }
+
+  function updateLinkContextMenuVisibility() {
+    if (!isLinkContextMenuActive()) {
+      hideAllLinkContextMenuItems();
+      return;
+    }
+
+    setLinkContextActionHidden(
+      LINK_CONTEXT_ACTIONS.find(action => action.id === 'openLinkBelowPinned'),
+      !getActiveBrowserTab()?.pinned
+    );
+    buildLinkFolderMenu();
+    buildLinkWorkspaceMenu();
+    updateLinkContextMenuSeparatorVisibility();
   }
 
   function installContextMenu() {
@@ -1656,9 +2098,61 @@ import {
 
       updateMenuVisibility();
     });
+    logDebug('Installed tab context menu integration.');
+  }
+
+  function installLinkContextMenu() {
+    const pageContextMenu = document.getElementById('contentAreaContextMenu');
+
+    if (!pageContextMenu) {
+      setTimeout(installLinkContextMenu, 500);
+      return;
+    }
+
+    if (document.getElementById(MENU_IDS.linkSeparator)) {
+      return;
+    }
+
+    const fragment = MozXULElement.parseXULToFragment(`
+      <menuseparator id="${MENU_IDS.linkSeparator}" hidden="true" />
+      <menuitem id="${MENU_IDS.openLinkBelowPinned}" label="Open Link Below This Pinned Tab" hidden="true" />
+      <menu id="${MENU_IDS.openLinkToFolder}" label="Open Link in Folder" hidden="true">
+        <menupopup id="${MENU_IDS.openLinkToFolderPopup}" />
+      </menu>
+      <menu id="${MENU_IDS.openLinkToWorkspace}" label="Open Link in Space Container" hidden="true">
+        <menupopup id="${MENU_IDS.openLinkToWorkspacePopup}" />
+      </menu>
+    `);
+
+    const anchor =
+      document.getElementById('context-openlinkintab') ||
+      document.getElementById('context-openlinkprivate') ||
+      document.getElementById('context-sep-open');
+
+    if (anchor) {
+      anchor.before(fragment);
+    } else {
+      pageContextMenu.appendChild(fragment);
+    }
+
+    document
+      .getElementById(MENU_IDS.openLinkBelowPinned)
+      .addEventListener('command', () => openLinkBelowPinnedTab());
+    pageContextMenu.addEventListener('popupshowing', event => {
+      if (event.target?.id !== 'contentAreaContextMenu') {
+        return;
+      }
+
+      updateLinkContextMenuVisibility();
+    });
+    logDebug('Installed webpage link context menu integration.');
   }
 
   function init() {
+    appendDebugEntry('debug', 'Initializing Zen Browser Utilities.', {
+      href: window.location.href,
+    }, true);
+
     if (isBrowserPage()) {
       installKeyboardFallback();
       installShortcutCommands();
@@ -1675,6 +2169,7 @@ import {
         });
       }, { once: true });
       installContextMenu();
+      installLinkContextMenu();
       window.setInterval(() => {
         void maybeRunStaleTabsSweep();
       }, STALE_MONITOR_INTERVAL_MS);
