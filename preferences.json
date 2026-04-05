@@ -85,19 +85,19 @@
   },
   {
     "property": "zen-browser-utilities.linkContextMenu.openBelowPinned",
-    "label": "Show “Open Link Below Current Pinned Tab” in the webpage link right-click context menu",
+    "label": "Show Open Link Below Current Pinned Tab in the webpage link right-click context menu",
     "type": "checkbox",
     "defaultValue": true
   },
   {
     "property": "zen-browser-utilities.linkContextMenu.openToFolder",
-    "label": "Show “Open Link in Folder” in the webpage link right-click context menu",
+    "label": "Show Open Link in Folder in the webpage link right-click context menu",
     "type": "checkbox",
     "defaultValue": true
   },
   {
     "property": "zen-browser-utilities.linkContextMenu.openToWorkspace",
-    "label": "Show “Open Link in Space Container” in the webpage link right-click context menu",
+    "label": "Show Open Link in Space Container in the webpage link right-click context menu",
     "type": "checkbox",
     "defaultValue": true
   },

@@ -537,6 +537,8 @@
 		const DEBUG_LOG_EXPORT_BUTTON_ID = "zen-browser-utilities-export-debug-log";
 		const DEBUG_LOG_EXPORT_PANEL_ID = "zen-browser-utilities-export-debug-panel";
 		const DEBUG_LOG_PREF = "zen-browser-utilities.debug.enabled";
+		const LINK_CONTEXT_MENU_RETRY_BASE_MS = 500;
+		const LINK_CONTEXT_MENU_RETRY_MAX_ATTEMPTS = 6;
 		const CONTEXT_MENU_ACTIONS = ACTIONS.filter((action) => action.contextMenuPrefKey && action.contextMenuMenuId);
 		const LINK_CONTEXT_ACTIONS = [
 			{
@@ -555,6 +557,7 @@
 				menuId: MENU_IDS.openLinkToWorkspace
 			}
 		];
+		const LINK_CONTEXT_ACTIONS_BY_ID = new Map(LINK_CONTEXT_ACTIONS.map((action) => [action.id, action]));
 		const KEYCODE_DISPLAY_NAMES = new Map([
 			["VK_BACK", "Backspace"],
 			["VK_DELETE", "Delete"],
@@ -598,6 +601,7 @@
 		let lastStaleSweepAt = 0;
 		let keyboardFallbackInstalled = false;
 		let shortcutEditorObserver = null;
+		let linkContextMenuInstallAttempts = 0;
 		let debugEntries = [];
 		function isDebugLoggingEnabled() {
 			try {
@@ -1474,7 +1478,11 @@
 		}
 		function installDebugExportButton() {
 			const container = getDebugExportButtonContainer();
-			if (!container || document.getElementById(DEBUG_LOG_EXPORT_PANEL_ID)) return;
+			if (!container) {
+				logDebug("Skipped debug export button install because the shortcut editor container is unavailable.");
+				return;
+			}
+			if (document.getElementById(DEBUG_LOG_EXPORT_PANEL_ID)) return;
 			const panel = document.createXULElement("vbox");
 			panel.id = DEBUG_LOG_EXPORT_PANEL_ID;
 			panel.setAttribute("style", "margin-bottom: 12px; gap: 6px;");
@@ -1657,7 +1665,7 @@
 			clearPopupChildren(MENU_IDS.openLinkToFolderPopup);
 			const folders = getAvailableFoldersForLinkContext();
 			const popup = document.getElementById(MENU_IDS.openLinkToFolderPopup);
-			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS.find((item) => item.id === "openLinkToFolder"), !folders.length);
+			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS_BY_ID.get("openLinkToFolder") || null, !folders.length);
 			for (const folder of folders) {
 				const item = document.createXULElement("menuitem");
 				item.setAttribute("label", folder.label);
@@ -1672,7 +1680,7 @@
 			clearPopupChildren(MENU_IDS.openLinkToWorkspacePopup);
 			const workspaces = getAvailableWorkspacesForLinkContext();
 			const popup = document.getElementById(MENU_IDS.openLinkToWorkspacePopup);
-			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS.find((item) => item.id === "openLinkToWorkspace"), !workspaces.length);
+			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS_BY_ID.get("openLinkToWorkspace") || null, !workspaces.length);
 			for (const workspace of workspaces) {
 				const item = document.createXULElement("menuitem");
 				item.setAttribute("label", workspace.label);
@@ -1720,7 +1728,7 @@
 				hideAllLinkContextMenuItems();
 				return;
 			}
-			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS.find((action) => action.id === "openLinkBelowPinned"), !visibility.openBelowPinned);
+			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS_BY_ID.get("openLinkBelowPinned") || null, !visibility.openBelowPinned);
 			buildLinkFolderMenu();
 			buildLinkWorkspaceMenu();
 			updateLinkContextMenuSeparatorVisibility();
@@ -1777,9 +1785,16 @@
 		function installLinkContextMenu() {
 			const pageContextMenu = document.getElementById("contentAreaContextMenu");
 			if (!pageContextMenu) {
-				setTimeout(installLinkContextMenu, 500);
+				if (linkContextMenuInstallAttempts >= LINK_CONTEXT_MENU_RETRY_MAX_ATTEMPTS) {
+					logDebug("Stopped retrying native webpage link context menu install because the menu never became available.");
+					return;
+				}
+				const retryDelayMs = Math.min(LINK_CONTEXT_MENU_RETRY_BASE_MS * 2 ** linkContextMenuInstallAttempts, 5e3);
+				linkContextMenuInstallAttempts += 1;
+				setTimeout(installLinkContextMenu, retryDelayMs);
 				return;
 			}
+			linkContextMenuInstallAttempts = 0;
 			if (document.getElementById(MENU_IDS.linkSeparator)) return;
 			const fragment = MozXULElement.parseXULToFragment(`
       <menuseparator id="${MENU_IDS.linkSeparator}" hidden="true" />

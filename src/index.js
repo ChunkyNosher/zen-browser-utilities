@@ -1,4 +1,18 @@
-/* global Services, SessionStore, TabContextMenu, gContextMenu, gBrowser, gZenFolders, gZenWorkspaces, MozXULElement, ContextualIdentityService, Cc, Ci, ChromeUtils, AppConstants */
+/* global
+Services,
+SessionStore,
+TabContextMenu,
+gContextMenu,
+gBrowser,
+gZenFolders,
+gZenWorkspaces,
+MozXULElement,
+ContextualIdentityService,
+Cc,
+Ci,
+ChromeUtils,
+AppConstants
+*/
 
 import {
   buildFolderChoices,
@@ -78,6 +92,8 @@ import {
   const DEBUG_LOG_EXPORT_BUTTON_ID = 'zen-browser-utilities-export-debug-log';
   const DEBUG_LOG_EXPORT_PANEL_ID = 'zen-browser-utilities-export-debug-panel';
   const DEBUG_LOG_PREF = 'zen-browser-utilities.debug.enabled';
+  const LINK_CONTEXT_MENU_RETRY_BASE_MS = 500;
+  const LINK_CONTEXT_MENU_RETRY_MAX_ATTEMPTS = 6;
   const CONTEXT_MENU_ACTIONS = ACTIONS.filter(
     action => action.contextMenuPrefKey && action.contextMenuMenuId
   );
@@ -98,6 +114,9 @@ import {
       menuId: MENU_IDS.openLinkToWorkspace,
     },
   ];
+  const LINK_CONTEXT_ACTIONS_BY_ID = new Map(
+    LINK_CONTEXT_ACTIONS.map(action => [action.id, action])
+  );
   const KEYCODE_DISPLAY_NAMES = new Map([
     ['VK_BACK', 'Backspace'],
     ['VK_DELETE', 'Delete'],
@@ -141,6 +160,7 @@ import {
   let lastStaleSweepAt = 0;
   let keyboardFallbackInstalled = false;
   let shortcutEditorObserver = null;
+  let linkContextMenuInstallAttempts = 0;
   let debugEntries = [];
 
   function isDebugLoggingEnabled() {
@@ -1637,7 +1657,12 @@ import {
   function installDebugExportButton() {
     const container = getDebugExportButtonContainer();
 
-    if (!container || document.getElementById(DEBUG_LOG_EXPORT_PANEL_ID)) {
+    if (!container) {
+      logDebug('Skipped debug export button install because the shortcut editor container is unavailable.');
+      return;
+    }
+
+    if (document.getElementById(DEBUG_LOG_EXPORT_PANEL_ID)) {
       return;
     }
 
@@ -1914,7 +1939,7 @@ import {
     clearPopupChildren(MENU_IDS.openLinkToFolderPopup);
     const folders = getAvailableFoldersForLinkContext();
     const popup = document.getElementById(MENU_IDS.openLinkToFolderPopup);
-    const action = LINK_CONTEXT_ACTIONS.find(item => item.id === 'openLinkToFolder');
+    const action = LINK_CONTEXT_ACTIONS_BY_ID.get('openLinkToFolder') || null;
 
     setLinkContextActionHidden(action, !folders.length);
 
@@ -1933,7 +1958,7 @@ import {
     clearPopupChildren(MENU_IDS.openLinkToWorkspacePopup);
     const workspaces = getAvailableWorkspacesForLinkContext();
     const popup = document.getElementById(MENU_IDS.openLinkToWorkspacePopup);
-    const action = LINK_CONTEXT_ACTIONS.find(item => item.id === 'openLinkToWorkspace');
+    const action = LINK_CONTEXT_ACTIONS_BY_ID.get('openLinkToWorkspace') || null;
 
     setLinkContextActionHidden(action, !workspaces.length);
 
@@ -2021,7 +2046,7 @@ import {
     }
 
     setLinkContextActionHidden(
-      LINK_CONTEXT_ACTIONS.find(action => action.id === 'openLinkBelowPinned'),
+      LINK_CONTEXT_ACTIONS_BY_ID.get('openLinkBelowPinned') || null,
       !visibility.openBelowPinned
     );
     buildLinkFolderMenu();
@@ -2124,9 +2149,21 @@ import {
     const pageContextMenu = document.getElementById('contentAreaContextMenu');
 
     if (!pageContextMenu) {
-      setTimeout(installLinkContextMenu, 500);
+      if (linkContextMenuInstallAttempts >= LINK_CONTEXT_MENU_RETRY_MAX_ATTEMPTS) {
+        logDebug('Stopped retrying native webpage link context menu install because the menu never became available.');
+        return;
+      }
+
+      const retryDelayMs = Math.min(
+        LINK_CONTEXT_MENU_RETRY_BASE_MS * 2 ** linkContextMenuInstallAttempts,
+        5_000
+      );
+      linkContextMenuInstallAttempts += 1;
+      setTimeout(installLinkContextMenu, retryDelayMs);
       return;
     }
+
+    linkContextMenuInstallAttempts = 0;
 
     if (document.getElementById(MENU_IDS.linkSeparator)) {
       return;
