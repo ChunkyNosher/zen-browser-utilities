@@ -1928,7 +1928,7 @@ import {
       item.setAttribute('label', folder.label);
       item.dataset.folderId = folder.id;
       item.addEventListener('command', () => {
-        void openLinkInFolder(folder.folder);
+        openLinkInFolder(folder.folder);
       });
       popup?.appendChild(item);
     }
@@ -1947,7 +1947,7 @@ import {
       item.setAttribute('label', workspace.label);
       item.dataset.workspaceId = workspace.id;
       item.addEventListener('command', () => {
-        void openLinkInWorkspace(workspace.id);
+        openLinkInWorkspace(workspace.id);
       });
       popup?.appendChild(item);
     }
