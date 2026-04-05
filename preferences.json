@@ -84,6 +84,24 @@
     "defaultValue": true
   },
   {
+    "property": "zen-browser-utilities.linkContextMenu.openBelowPinned",
+    "label": "Show Open Link Below Current Pinned Tab in the webpage link right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.linkContextMenu.openToFolder",
+    "label": "Show Open Link in Folder in the webpage link right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.linkContextMenu.openToWorkspace",
+    "label": "Show Open Link in Space Container in the webpage link right-click context menu",
+    "type": "checkbox",
+    "defaultValue": true
+  },
+  {
     "property": "zen-browser-utilities.close.batchSize",
     "label": "Bulk close batch size (recommended 10-30)",
     "type": "string",
@@ -122,5 +140,11 @@
     "label": "Do not auto-close tabs that are currently producing audio",
     "type": "checkbox",
     "defaultValue": true
+  },
+  {
+    "property": "zen-browser-utilities.debug.enabled",
+    "label": "Enable Zen Browser Utilities debug logging for the export button in Keyboard Shortcuts",
+    "type": "checkbox",
+    "defaultValue": false
   }
 ]
