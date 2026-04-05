@@ -251,6 +251,31 @@
 		};
 	}
 	//#endregion
+	//#region src/link-context-utils.js
+	function getLinkUrlFromContextMenu(contextMenu) {
+		return contextMenu?.linkURL || contextMenu?.linkURI?.spec || contextMenu?.linkURI?.displaySpec || "";
+	}
+	function isEligibleLinkContext(contextMenu) {
+		return Boolean(contextMenu?.onLink && !contextMenu?.onMailtoLink && !contextMenu?.onTelLink && getLinkUrlFromContextMenu(contextMenu));
+	}
+	function getLinkContextVisibilityState({ isEligible, currentTabPinned, folderCount, workspaceCount }) {
+		if (!isEligible) return {
+			openBelowPinned: false,
+			openToFolder: false,
+			openToWorkspace: false,
+			separator: false
+		};
+		const openBelowPinned = Boolean(currentTabPinned);
+		const openToFolder = folderCount > 0;
+		const openToWorkspace = workspaceCount > 0;
+		return {
+			openBelowPinned,
+			openToFolder,
+			openToWorkspace,
+			separator: openBelowPinned || openToFolder || openToWorkspace
+		};
+	}
+	//#endregion
 	//#region src/shortcut-utils.js
 	var MODIFIER_ORDER = [
 		"Control",
@@ -1034,10 +1059,10 @@
 			return createdTabs.length > 0;
 		}
 		function getContextLinkUrl() {
-			return gContextMenu?.linkURL || gContextMenu?.linkURI?.spec || gContextMenu?.linkURI?.displaySpec || "";
+			return getLinkUrlFromContextMenu(gContextMenu);
 		}
 		function isLinkContextMenuActive() {
-			return Boolean(gContextMenu?.onLink && !gContextMenu?.onMailtoLink && !gContextMenu?.onTelLink && getContextLinkUrl());
+			return isEligibleLinkContext(gContextMenu);
 		}
 		function getAvailableFoldersForLinkContext() {
 			return getAvailableFolders(getActiveBrowserTab());
@@ -1685,11 +1710,17 @@
 			updateContextMenuSeparatorVisibility();
 		}
 		function updateLinkContextMenuVisibility() {
-			if (!isLinkContextMenuActive()) {
+			const visibility = getLinkContextVisibilityState({
+				isEligible: isLinkContextMenuActive(),
+				currentTabPinned: Boolean(getActiveBrowserTab()?.pinned),
+				folderCount: getAvailableFoldersForLinkContext().length,
+				workspaceCount: getAvailableWorkspacesForLinkContext().length
+			});
+			if (!visibility.separator) {
 				hideAllLinkContextMenuItems();
 				return;
 			}
-			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS.find((action) => action.id === "openLinkBelowPinned"), !getActiveBrowserTab()?.pinned);
+			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS.find((action) => action.id === "openLinkBelowPinned"), !visibility.openBelowPinned);
 			buildLinkFolderMenu();
 			buildLinkWorkspaceMenu();
 			updateLinkContextMenuSeparatorVisibility();

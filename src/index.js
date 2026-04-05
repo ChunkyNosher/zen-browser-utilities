@@ -11,6 +11,11 @@ import { ACTIONS, ACTIONS_BY_ID } from './action-definitions.js';
 import { chunkItems, parsePositiveInteger } from './batch-utils.js';
 import { createDebugSnapshot, limitDebugEntries } from './debug-utils.js';
 import {
+  getLinkContextVisibilityState,
+  getLinkUrlFromContextMenu,
+  isEligibleLinkContext,
+} from './link-context-utils.js';
+import {
   getSpecialKeycode,
   parseShortcutBinding,
   shortcutMatchesEvent,
@@ -968,21 +973,11 @@ import {
   }
 
   function getContextLinkUrl() {
-    return (
-      gContextMenu?.linkURL ||
-      gContextMenu?.linkURI?.spec ||
-      gContextMenu?.linkURI?.displaySpec ||
-      ''
-    );
+    return getLinkUrlFromContextMenu(gContextMenu);
   }
 
   function isLinkContextMenuActive() {
-    return Boolean(
-      gContextMenu?.onLink &&
-      !gContextMenu?.onMailtoLink &&
-      !gContextMenu?.onTelLink &&
-      getContextLinkUrl()
-    );
+    return isEligibleLinkContext(gContextMenu);
   }
 
   function getAvailableFoldersForLinkContext() {
@@ -2013,14 +2008,21 @@ import {
   }
 
   function updateLinkContextMenuVisibility() {
-    if (!isLinkContextMenuActive()) {
+    const visibility = getLinkContextVisibilityState({
+      isEligible: isLinkContextMenuActive(),
+      currentTabPinned: Boolean(getActiveBrowserTab()?.pinned),
+      folderCount: getAvailableFoldersForLinkContext().length,
+      workspaceCount: getAvailableWorkspacesForLinkContext().length,
+    });
+
+    if (!visibility.separator) {
       hideAllLinkContextMenuItems();
       return;
     }
 
     setLinkContextActionHidden(
       LINK_CONTEXT_ACTIONS.find(action => action.id === 'openLinkBelowPinned'),
-      !getActiveBrowserTab()?.pinned
+      !visibility.openBelowPinned
     );
     buildLinkFolderMenu();
     buildLinkWorkspaceMenu();
