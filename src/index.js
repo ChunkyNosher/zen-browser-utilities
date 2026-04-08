@@ -1738,7 +1738,7 @@ import {
     picker.defaultExtension = 'json';
     picker.appendFilter('JSON', '*.json');
 
-    // nsIFilePicker.open is callback-based in browser chrome, so wrap it to
+    // nsIFilePicker.open is callback-based in the Firefox browser context, so wrap it to
     // wait for the actual picker result instead of returning immediately.
     const result = await new Promise(resolve => {
       picker.open(resolve);
