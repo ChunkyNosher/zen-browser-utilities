@@ -89,7 +89,7 @@ import {
   const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
   const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
   const DEBUG_LOG_MAX_ENTRIES = 500;
-  const PINNED_DRAG_DUPLICATE_TIMEOUT_MS = 2_000;
+  const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2_000;
   const DEBUG_LOG_EXPORT_BUTTON_ID = 'zen-browser-utilities-export-debug-log';
   const DEBUG_LOG_EXPORT_PANEL_ID = 'zen-browser-utilities-export-debug-panel';
   const DEBUG_LOG_PREF = 'zen-browser-utilities.debug.enabled';
@@ -968,7 +968,7 @@ import {
     };
     pendingPinnedDragDuplicateTimer = window.setTimeout(() => {
       clearPendingPinnedDragDuplicatePlacement();
-    }, PINNED_DRAG_DUPLICATE_TIMEOUT_MS);
+    }, PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS);
   }
 
   function maybePlacePinnedDragDuplicate(sourceTab, duplicatedTab) {
@@ -1738,6 +1738,8 @@ import {
     picker.defaultExtension = 'json';
     picker.appendFilter('JSON', '*.json');
 
+    // nsIFilePicker.open is callback-based in browser chrome, so wrap it to
+    // wait for the actual picker result instead of returning immediately.
     const result = await new Promise(resolve => {
       picker.open(resolve);
     });
