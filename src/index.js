@@ -162,6 +162,9 @@ import {
   let shortcutEditorObserver = null;
   let linkContextMenuInstallAttempts = 0;
   let debugEntries = [];
+  let activePinnedDragTabs = [];
+  let pendingPinnedDragDuplicatePlacement = null;
+  let pendingPinnedDragDuplicateTimer = 0;
 
   function isDebugLoggingEnabled() {
     try {
@@ -858,6 +861,134 @@ import {
     return moveTabsToWorkspaceWithContainer(workspaces[index].id);
   }
 
+  function getDraggedPinnedTabs(draggedTab) {
+    if (!draggedTab?.pinned) {
+      return [];
+    }
+
+    if (!draggedTab.multiselected) {
+      return [draggedTab];
+    }
+
+    const selectedTabs = Array.from(gBrowser?.selectedTabs || []);
+
+    if (!selectedTabs.length || selectedTabs.some(tab => !tab?.pinned)) {
+      return [];
+    }
+
+    return selectedTabs;
+  }
+
+  function clearPendingPinnedDragDuplicatePlacement() {
+    pendingPinnedDragDuplicatePlacement = null;
+
+    if (pendingPinnedDragDuplicateTimer) {
+      window.clearTimeout(pendingPinnedDragDuplicateTimer);
+      pendingPinnedDragDuplicateTimer = 0;
+    }
+  }
+
+  function isCopyDragOperation(event) {
+    const dropEffect = event.dataTransfer?.dropEffect || '';
+
+    return dropEffect === 'copy' || event.ctrlKey || event.metaKey;
+  }
+
+  function getPinnedDropPlacement(event, fallbackTab = null) {
+    const pinnedTarget = event.target?.closest?.(
+      ':is(.zen-current-workspace-indicator, .zen-workspace-pinned-tabs-section)'
+    );
+
+    if (!pinnedTarget) {
+      return null;
+    }
+
+    const targetTab = event.target?.closest?.('.tabbrowser-tab');
+    const targetFolder = event.target?.closest?.('zen-folder');
+    let targetElement = targetTab || targetFolder?.labelElement || null;
+
+    if (targetElement?.group?.activeGroups?.length) {
+      targetElement = targetElement.group.activeGroups.at(-1)?.labelElement || targetElement;
+    }
+
+    const parent =
+      targetElement?.parentElement ||
+      fallbackTab?.parentElement ||
+      gZenWorkspaces?.pinnedTabsContainer ||
+      null;
+
+    if (!parent) {
+      return null;
+    }
+
+    let beforeNode = null;
+
+    if (targetElement) {
+      const rect = targetElement.getBoundingClientRect();
+      const placeAfter = event.screenY > targetElement.screenY + rect.height / 2;
+      beforeNode = placeAfter ? targetElement.nextElementSibling : targetElement;
+    }
+
+    return {
+      parent,
+      beforeNode,
+      workspaceId: getWorkspaceIdForNode(targetElement || fallbackTab),
+    };
+  }
+
+  function placePinnedTab(tab, placement) {
+    if (!tab || !placement?.parent) {
+      return false;
+    }
+
+    if (!tab.pinned) {
+      gBrowser.pinTab(tab);
+    }
+
+    moveNode(tab, placement.parent, placement.beforeNode);
+
+    if (placement.workspaceId) {
+      tab.setAttribute('zen-workspace-id', placement.workspaceId);
+    }
+
+    return true;
+  }
+
+  function queuePinnedDragDuplicatePlacement(sourceTabs, placement) {
+    clearPendingPinnedDragDuplicatePlacement();
+
+    if (!sourceTabs.length || !placement?.parent) {
+      return;
+    }
+
+    pendingPinnedDragDuplicatePlacement = {
+      placement,
+      sourceTabs: new Set(sourceTabs),
+    };
+    pendingPinnedDragDuplicateTimer = window.setTimeout(() => {
+      clearPendingPinnedDragDuplicatePlacement();
+    }, 2_000);
+  }
+
+  function maybePlacePinnedDragDuplicate(sourceTab, duplicatedTab) {
+    const pendingPlacement = pendingPinnedDragDuplicatePlacement;
+
+    if (!pendingPlacement?.sourceTabs?.has(sourceTab)) {
+      return;
+    }
+
+    pendingPlacement.sourceTabs.delete(sourceTab);
+    placePinnedTab(duplicatedTab, {
+      ...pendingPlacement.placement,
+      workspaceId:
+        pendingPlacement.placement.workspaceId || getWorkspaceIdForNode(sourceTab),
+    });
+
+    if (!pendingPlacement.sourceTabs.size) {
+      clearPendingPinnedDragDuplicatePlacement();
+    }
+  }
+
   function getSelectedPinnedTabs() {
     return getContextTabs().filter(tab => tab?.pinned);
   }
@@ -892,34 +1023,12 @@ import {
 
     for (const originalTab of originalTabs) {
       const duplicatedTab = gBrowser.duplicateTab(originalTab, true);
-      let finalized = false;
 
-      const finalizeDuplicate = () => {
-        if (finalized || !duplicatedTab?.isConnected) {
-          return;
-        }
-
-        finalized = true;
-
-        if (!duplicatedTab.pinned) {
-          gBrowser.pinTab(duplicatedTab);
-        }
-
-        const parent = originalTab.parentElement;
-        const beforeNode = originalTab.nextElementSibling;
-        moveNode(duplicatedTab, parent, beforeNode);
-
-        const workspaceId = getWorkspaceIdForNode(originalTab);
-        if (workspaceId) {
-          duplicatedTab.setAttribute('zen-workspace-id', workspaceId);
-        }
-      };
-
-      duplicatedTab.addEventListener('SSTabRestored', finalizeDuplicate, {
-        once: true,
+      placePinnedTab(duplicatedTab, {
+        parent: originalTab.parentElement,
+        beforeNode: originalTab.nextElementSibling,
+        workspaceId: getWorkspaceIdForNode(originalTab),
       });
-
-      setTimeout(finalizeDuplicate, 500);
     }
 
     return true;
@@ -1628,7 +1737,9 @@ import {
     picker.defaultExtension = 'json';
     picker.appendFilter('JSON', '*.json');
 
-    const result = await picker.open();
+    const result = await new Promise(resolve => {
+      picker.open(resolve);
+    });
 
     if (
       result !== Ci.nsIFilePicker.returnOK &&
@@ -1652,6 +1763,58 @@ import {
     await IOUtils.writeUTF8(picker.file.path, `${JSON.stringify(snapshot, null, 2)}\n`);
     logDebug('Exported debug log to file.', { path: picker.file.path });
     return true;
+  }
+
+  function installPinnedDragDuplicateHandler() {
+    const tabContainer = gBrowser?.tabContainer;
+
+    if (!tabContainer || tabContainer.__zenBrowserUtilitiesPinnedDuplicatePatched) {
+      return;
+    }
+
+    const originalDuplicateTab = gBrowser.duplicateTab.bind(gBrowser);
+
+    gBrowser.duplicateTab = (...args) => {
+      const duplicatedTab = originalDuplicateTab(...args);
+      maybePlacePinnedDragDuplicate(args[0], duplicatedTab);
+      return duplicatedTab;
+    };
+
+    const onDragStart = event => {
+      activePinnedDragTabs = getDraggedPinnedTabs(event.target?.closest?.('.tabbrowser-tab'));
+    };
+    const onDropCapture = event => {
+      if (!activePinnedDragTabs.length || !isCopyDragOperation(event)) {
+        clearPendingPinnedDragDuplicatePlacement();
+        return;
+      }
+
+      const placement = getPinnedDropPlacement(event, activePinnedDragTabs[0]);
+
+      if (!placement) {
+        clearPendingPinnedDragDuplicatePlacement();
+        return;
+      }
+
+      queuePinnedDragDuplicatePlacement(activePinnedDragTabs, placement);
+    };
+    const resetDragState = () => {
+      activePinnedDragTabs = [];
+    };
+
+    tabContainer.addEventListener('dragstart', onDragStart, true);
+    tabContainer.addEventListener('drop', onDropCapture, true);
+    tabContainer.addEventListener('dragend', resetDragState, true);
+    tabContainer.addEventListener('drop', resetDragState);
+    tabContainer.__zenBrowserUtilitiesPinnedDuplicatePatched = true;
+    window.addEventListener('unload', () => {
+      tabContainer.removeEventListener('dragstart', onDragStart, true);
+      tabContainer.removeEventListener('drop', onDropCapture, true);
+      tabContainer.removeEventListener('dragend', resetDragState, true);
+      tabContainer.removeEventListener('drop', resetDragState);
+      clearPendingPinnedDragDuplicatePlacement();
+      activePinnedDragTabs = [];
+    }, { once: true });
   }
 
   function installDebugExportButton() {
@@ -2212,6 +2375,7 @@ import {
     if (isBrowserPage()) {
       installKeyboardFallback();
       installShortcutCommands();
+      installPinnedDragDuplicateHandler();
       void ensureCustomShortcutDefinitions().then(ready => {
         if (ready) {
           removeKeyboardFallback();
