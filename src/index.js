@@ -95,7 +95,7 @@ import {
   const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
   const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
   const DEBUG_LOG_MAX_ENTRIES = 500;
-  const MENU_CHOICE_INDENT = '  ';
+  const MENU_CHOICE_INDENT = '  ';
   // Keep the captured drop target alive briefly so duplicateTab can finish
   // firing after a Ctrl-drag copy without losing the intended pinned position.
   const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2_000;

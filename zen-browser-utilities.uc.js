@@ -505,7 +505,7 @@
 		const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
 		const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
 		const DEBUG_LOG_MAX_ENTRIES = 500;
-		const MENU_CHOICE_INDENT = "\xA0\xA0";
+		const MENU_CHOICE_INDENT = "  ";
 		const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2e3;
 		const DEBUG_LOG_EXPORT_BUTTON_ID = "zen-browser-utilities-export-debug-log";
 		const DEBUG_LOG_EXPORT_PANEL_ID = "zen-browser-utilities-export-debug-panel";
