@@ -95,6 +95,7 @@ import {
   const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
   const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
   const DEBUG_LOG_MAX_ENTRIES = 500;
+  const ICON_LABEL_SPACING = '  ';
   const MENU_CHOICE_INDENT = '  ';
   // Keep the captured drop target alive briefly so duplicateTab can finish
   // firing after a Ctrl-drag copy without losing the intended pinned position.
@@ -1035,8 +1036,8 @@ import {
 
     if (targetElement) {
       const rect = targetElement.getBoundingClientRect();
-      const placeAfter = event.clientY > rect.top + rect.height / 2;
-      beforeNode = placeAfter ? targetElement.nextElementSibling : targetElement;
+      const shouldInsertAfterTarget = event.clientY > rect.top + rect.height / 2;
+      beforeNode = shouldInsertAfterTarget ? targetElement.nextElementSibling : targetElement;
     }
 
     return {
@@ -2189,7 +2190,7 @@ import {
     const workspace = workspaceChoice.workspace;
     const icon = workspace?.icon || '';
     const label = icon && !icon.endsWith('.svg')
-      ? `${icon}  ${workspaceChoice.label}`
+      ? `${icon}${ICON_LABEL_SPACING}${workspaceChoice.label}`
       : workspaceChoice.label;
 
     if (

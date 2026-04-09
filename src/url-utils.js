@@ -90,7 +90,7 @@ function escapeCsvCell(value) {
   const text = String(value ?? '');
 
   if (/[",\r\n]/.test(text)) {
-    return `"${text.replaceAll('"', '""')}"`;
+    return `"${text.replace(/"/g, '""')}"`;
   }
 
   return text;
