@@ -505,6 +505,7 @@
 		const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
 		const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
 		const DEBUG_LOG_MAX_ENTRIES = 500;
+		const FOLDER_CHOICE_INDENT = "\xA0\xA0";
 		const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2e3;
 		const DEBUG_LOG_EXPORT_BUTTON_ID = "zen-browser-utilities-export-debug-log";
 		const DEBUG_LOG_EXPORT_PANEL_ID = "zen-browser-utilities-export-debug-panel";
@@ -911,7 +912,7 @@
 			return new Set(Array.from(folder?.querySelectorAll?.("zen-folder") || []).map((node) => node.id));
 		}
 		function formatFolderChoiceLabel(folder) {
-			return `${"\xA0\xA0".repeat(folder.level || 0)}${getFolderLabel(folder)}`;
+			return `${FOLDER_CHOICE_INDENT.repeat(folder.level || 0)}${getFolderLabel(folder)}`;
 		}
 		function getFolderMoveChoices(folder) {
 			if (!folder) return [];

@@ -95,6 +95,9 @@ import {
   const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
   const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
   const DEBUG_LOG_MAX_ENTRIES = 500;
+  const FOLDER_CHOICE_INDENT = '  ';
+  // Keep the captured drop target alive briefly so duplicateTab can finish
+  // firing after a Ctrl-drag copy without losing the intended pinned position.
   const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2_000;
   const DEBUG_LOG_EXPORT_BUTTON_ID = 'zen-browser-utilities-export-debug-log';
   const DEBUG_LOG_EXPORT_PANEL_ID = 'zen-browser-utilities-export-debug-panel';
@@ -763,7 +766,7 @@ import {
   }
 
   function formatFolderChoiceLabel(folder) {
-    return `${'  '.repeat(folder.level || 0)}${getFolderLabel(folder)}`;
+    return `${FOLDER_CHOICE_INDENT.repeat(folder.level || 0)}${getFolderLabel(folder)}`;
   }
 
   function getFolderMoveChoices(folder) {
