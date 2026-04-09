@@ -36,7 +36,7 @@ import {
 } from './shortcut-utils.js';
 import { getStaleTabs } from './stale-tab-utils.js';
 import {
-  extractUrlsFromCsvText,
+  formatRowsAsCsv,
   parseLineSeparatedUrls,
 } from './url-utils.js';
 
@@ -55,10 +55,16 @@ import {
     moveToWorkspace: 'zen-browser-utilities-move-to-workspace',
     moveToWorkspacePopup: 'zen-browser-utilities-move-to-workspace-popup',
     copySelectedTabUrls: 'zen-browser-utilities-copy-selected-tab-urls',
+    copySelectedTabUrlsCsv: 'zen-browser-utilities-copy-selected-tab-urls-csv',
     pasteTabUrls: 'zen-browser-utilities-paste-tab-urls',
-    pasteTabUrlsCsv: 'zen-browser-utilities-paste-tab-urls-csv',
     closeStaleTabs: 'zen-browser-utilities-close-stale-tabs',
     replacePinnedUrlWithCurrent: 'zen-browser-utilities-replace-pinned-url-with-current',
+    folderContextSeparator: 'zen-browser-utilities-folder-context-separator',
+    folderMoveToTop: 'zen-browser-utilities-folder-move-to-top',
+    folderMoveBelow: 'zen-browser-utilities-folder-move-below',
+    folderMoveBelowPopup: 'zen-browser-utilities-folder-move-below-popup',
+    folderMoveInside: 'zen-browser-utilities-folder-move-inside',
+    folderMoveInsidePopup: 'zen-browser-utilities-folder-move-inside-popup',
     linkSeparator: 'zen-browser-utilities-link-context-separator',
     openLinkBelowPinned: 'zen-browser-utilities-open-link-below-pinned',
     openLinkToFolder: 'zen-browser-utilities-open-link-to-folder',
@@ -89,6 +95,11 @@ import {
   const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
   const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
   const DEBUG_LOG_MAX_ENTRIES = 500;
+  const ICON_LABEL_SPACING = '  ';
+  const MENU_CHOICE_INDENT = '  ';
+  // Keep the captured drop target alive briefly so duplicateTab can finish
+  // firing after a Ctrl-drag copy without losing the intended pinned position.
+  const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2_000;
   const DEBUG_LOG_EXPORT_BUTTON_ID = 'zen-browser-utilities-export-debug-log';
   const DEBUG_LOG_EXPORT_PANEL_ID = 'zen-browser-utilities-export-debug-panel';
   const DEBUG_LOG_PREF = 'zen-browser-utilities.debug.enabled';
@@ -162,6 +173,10 @@ import {
   let shortcutEditorObserver = null;
   let linkContextMenuInstallAttempts = 0;
   let debugEntries = [];
+  let activePinnedDragTabs = [];
+  let pendingPinnedDragDuplicatePlacement = null;
+  let pendingPinnedDragDuplicateTimer = 0;
+  let currentFolderContextMenu = null;
 
   function isDebugLoggingEnabled() {
     try {
@@ -716,6 +731,105 @@ import {
     return moveTabsToFolder(folders[index].folder);
   }
 
+  function isFolderNode(node) {
+    return node?.tagName?.toLowerCase?.() === 'zen-folder' && node?.isZenFolder;
+  }
+
+  function getFolderContextTargetFolder(target) {
+    if (gBrowser?.isTabGroupLabel?.(target)) {
+      return target.group;
+    }
+
+    if (gBrowser?.isTabGroupLabel?.(target?.parentElement)) {
+      return target.parentElement.group;
+    }
+
+    if (
+      target?.parentElement?.isZenFolder &&
+      target?.classList?.contains?.('tab-group-label-container')
+    ) {
+      return target.parentElement;
+    }
+
+    return null;
+  }
+
+  function getWorkspacePinnedContainer(workspaceId) {
+    return (
+      gZenWorkspaces?.workspaceElement?.(workspaceId)?.pinnedTabsContainer ||
+      gZenWorkspaces?.pinnedTabsContainer ||
+      null
+    );
+  }
+
+  function getFolderDescendantIds(folder) {
+    return new Set(Array.from(folder?.querySelectorAll?.('zen-folder') || [], node => node.id));
+  }
+
+  function formatFolderChoiceLabel(folder) {
+    return `${MENU_CHOICE_INDENT.repeat(folder.level || 0)}${getFolderLabel(folder)}`;
+  }
+
+  function getFolderMoveChoices(folder) {
+    if (!folder) {
+      return [];
+    }
+
+    const workspaceId = getWorkspaceIdForNode(folder);
+    const excludedIds = getFolderDescendantIds(folder);
+    excludedIds.add(folder.id);
+
+    return Array.from(document.querySelectorAll('zen-folder'))
+      .filter(candidate => {
+        return (
+          getWorkspaceIdForNode(candidate) === workspaceId &&
+          !excludedIds.has(candidate.id)
+        );
+      })
+      .map(candidate => ({
+        id: candidate.id,
+        label: formatFolderChoiceLabel(candidate),
+        folder: candidate,
+      }));
+  }
+
+  function moveFolderToTop(folder) {
+    if (!folder) {
+      return false;
+    }
+
+    const container = getWorkspacePinnedContainer(getWorkspaceIdForNode(folder));
+
+    if (!container) {
+      return false;
+    }
+
+    const firstRootFolder = Array.from(container.children).find(isFolderNode) || null;
+    const separator = container.querySelector('.pinned-tabs-container-separator');
+    moveNode(folder, container, firstRootFolder || separator || null);
+    return true;
+  }
+
+  function moveFolderBelowFolder(folder, targetFolder) {
+    if (!folder || !targetFolder || folder === targetFolder || !targetFolder.parentElement) {
+      return false;
+    }
+
+    moveNode(folder, targetFolder.parentElement, targetFolder.nextElementSibling);
+    return true;
+  }
+
+  function moveFolderInsideFolder(folder, targetFolder) {
+    if (!folder || !targetFolder || folder === targetFolder || typeof targetFolder.addTabs !== 'function') {
+      return false;
+    }
+
+    targetFolder.collapsed = false;
+    targetFolder.addTabs([folder]);
+    gBrowser?.tabContainer?._invalidateCachedTabs?.();
+    return true;
+  }
+
   function getWorkspaceLabel(workspace) {
     let label = workspace.name || workspace.uuid || 'Workspace';
 
@@ -858,6 +972,134 @@ import {
     return moveTabsToWorkspaceWithContainer(workspaces[index].id);
   }
 
+  function getDraggedPinnedTabs(draggedTab) {
+    if (!draggedTab?.pinned) {
+      return [];
+    }
+
+    if (!draggedTab.multiselected) {
+      return [draggedTab];
+    }
+
+    const selectedTabs = Array.from(gBrowser?.selectedTabs || []);
+
+    if (!selectedTabs.length || selectedTabs.some(tab => !tab?.pinned)) {
+      return [];
+    }
+
+    return selectedTabs;
+  }
+
+  function clearPendingPinnedDragDuplicatePlacement() {
+    pendingPinnedDragDuplicatePlacement = null;
+
+    if (pendingPinnedDragDuplicateTimer) {
+      window.clearTimeout(pendingPinnedDragDuplicateTimer);
+      pendingPinnedDragDuplicateTimer = 0;
+    }
+  }
+
+  function isCopyDragOperation(event) {
+    const dropEffect = event.dataTransfer?.dropEffect || '';
+
+    return dropEffect === 'copy' || event.ctrlKey || event.metaKey;
+  }
+
+  function getPinnedDropPlacement(event, fallbackTab = null) {
+    const pinnedTarget = event.target?.closest?.(
+      ':is(.zen-current-workspace-indicator, .zen-workspace-pinned-tabs-section)'
+    );
+
+    if (!pinnedTarget) {
+      return null;
+    }
+
+    const targetTab = event.target?.closest?.('.tabbrowser-tab');
+    const targetFolder = event.target?.closest?.('zen-folder');
+    let targetElement = targetTab || targetFolder?.labelElement || null;
+
+    if (targetElement?.group?.activeGroups?.length) {
+      targetElement = targetElement.group.activeGroups.at(-1)?.labelElement || targetElement;
+    }
+
+    const parent =
+      targetElement?.parentElement ||
+      fallbackTab?.parentElement ||
+      gZenWorkspaces?.pinnedTabsContainer ||
+      null;
+
+    if (!parent) {
+      return null;
+    }
+
+    let beforeNode = null;
+
+    if (targetElement) {
+      const rect = targetElement.getBoundingClientRect();
+      const shouldInsertAfterTarget = event.clientY > rect.top + rect.height / 2;
+      beforeNode = shouldInsertAfterTarget ? targetElement.nextElementSibling : targetElement;
+    }
+
+    return {
+      parent,
+      beforeNode,
+      workspaceId: getWorkspaceIdForNode(targetElement || fallbackTab),
+    };
+  }
+
+  function placePinnedTab(tab, placement) {
+    if (!tab || !placement?.parent) {
+      return false;
+    }
+
+    if (!tab.pinned) {
+      gBrowser.pinTab(tab);
+    }
+
+    moveNode(tab, placement.parent, placement.beforeNode);
+
+    if (placement.workspaceId) {
+      tab.setAttribute('zen-workspace-id', placement.workspaceId);
+    }
+
+    return true;
+  }
+
+  function queuePinnedDragDuplicatePlacement(sourceTabs, placement) {
+    clearPendingPinnedDragDuplicatePlacement();
+
+    if (!sourceTabs.length || !placement?.parent) {
+      return;
+    }
+
+    pendingPinnedDragDuplicatePlacement = {
+      placement,
+      sourceTabs: new Set(sourceTabs),
+    };
+    pendingPinnedDragDuplicateTimer = window.setTimeout(() => {
+      clearPendingPinnedDragDuplicatePlacement();
+    }, PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS);
+  }
+
+  function maybePlacePinnedDragDuplicate(sourceTab, duplicatedTab) {
+    const pendingPlacement = pendingPinnedDragDuplicatePlacement;
+
+    if (!pendingPlacement?.sourceTabs?.has(sourceTab)) {
+      return;
+    }
+
+    pendingPlacement.sourceTabs.delete(sourceTab);
+    placePinnedTab(duplicatedTab, {
+      ...pendingPlacement.placement,
+      workspaceId:
+        pendingPlacement.placement.workspaceId || getWorkspaceIdForNode(sourceTab),
+    });
+
+    if (!pendingPlacement.sourceTabs.size) {
+      clearPendingPinnedDragDuplicatePlacement();
+    }
+  }
+
   function getSelectedPinnedTabs() {
     return getContextTabs().filter(tab => tab?.pinned);
   }
@@ -892,53 +1134,49 @@ import {
 
     for (const originalTab of originalTabs) {
       const duplicatedTab = gBrowser.duplicateTab(originalTab, true);
-      let finalized = false;
 
-      const finalizeDuplicate = () => {
-        if (finalized || !duplicatedTab?.isConnected) {
-          return;
-        }
-
-        finalized = true;
-
-        if (!duplicatedTab.pinned) {
-          gBrowser.pinTab(duplicatedTab);
-        }
-
-        const parent = originalTab.parentElement;
-        const beforeNode = originalTab.nextElementSibling;
-        moveNode(duplicatedTab, parent, beforeNode);
-
-        const workspaceId = getWorkspaceIdForNode(originalTab);
-        if (workspaceId) {
-          duplicatedTab.setAttribute('zen-workspace-id', workspaceId);
-        }
-      };
-
-      duplicatedTab.addEventListener('SSTabRestored', finalizeDuplicate, {
-        once: true,
+      placePinnedTab(duplicatedTab, {
+        parent: originalTab.parentElement,
+        beforeNode: originalTab.nextElementSibling,
+        workspaceId: getWorkspaceIdForNode(originalTab),
       });
-
-      setTimeout(finalizeDuplicate, 500);
     }
 
     return true;
   }
 
-  function getTabUrls(tabs) {
+  function getTabClipboardRows(tabs) {
     return tabs
-      .map(tab => tab?.linkedBrowser?.currentURI?.spec || '')
-      .filter(Boolean);
+      .map(tab => ({
+        title: tab?.label || tab?.getAttribute?.('label') || '',
+        url: tab?.linkedBrowser?.currentURI?.spec || '',
+      }))
+      .filter(row => row.url);
   }
 
   async function copySelectedTabUrls() {
-    const urls = getTabUrls(getSelectedTabsIfPossible());
+    const rows = getTabClipboardRows(getSelectedTabsIfPossible());
 
-    if (!urls.length) {
+    if (!rows.length) {
       return false;
     }
 
-    return writeClipboardText(urls.join('\n'));
+    return writeClipboardText(rows.map(row => row.url).join('\n'));
+  }
+
+  async function copySelectedTabUrlsCsv() {
+    const rows = getTabClipboardRows(getSelectedTabsIfPossible());
+
+    if (!rows.length) {
+      return false;
+    }
+
+    return writeClipboardText(
+      formatRowsAsCsv([
+        ['Title', 'URL'],
+        ...rows.map(row => [row.title, row.url]),
+      ])
+    );
   }
 
   function getDestinationWorkspace(tab = getContextTab()) {
@@ -1132,15 +1370,6 @@ import {
     );
 
     return createTabsInCurrentContext(parseLineSeparatedUrls(clipboardText));
-  }
-
-  async function pasteTabUrlsCsv() {
-    const clipboardText = await readClipboardText(
-      'Paste CSV links as tabs',
-      'Paste CSV text and every URL-like cell will open in a new tab.'
-    );
-
-    return createTabsInCurrentContext(extractUrlsFromCsvText(clipboardText));
   }
 
   function collectStaleTabs() {
@@ -1628,7 +1857,12 @@ import {
     picker.defaultExtension = 'json';
     picker.appendFilter('JSON', '*.json');
 
-    const result = await picker.open();
+    // nsIFilePicker.open is callback-based in Firefox chrome code, unlike the
+    // Promise-returning version you might expect in other contexts, so wrap it
+    // to wait for the actual picker result instead of returning immediately.
+    const result = await new Promise(resolve => {
+      picker.open(resolve);
+    });
 
     if (
       result !== Ci.nsIFilePicker.returnOK &&
@@ -1652,6 +1886,59 @@ import {
     await IOUtils.writeUTF8(picker.file.path, `${JSON.stringify(snapshot, null, 2)}\n`);
     logDebug('Exported debug log to file.', { path: picker.file.path });
     return true;
+  }
+
+  function installPinnedDragDuplicateHandler() {
+    const tabContainer = gBrowser?.tabContainer;
+
+    if (!tabContainer || tabContainer.__zenBrowserUtilitiesPinnedDuplicatePatched) {
+      return;
+    }
+
+    const originalDuplicateTab = gBrowser.duplicateTab;
+
+    gBrowser.duplicateTab = (sourceTab, ...restArgs) => {
+      const duplicatedTab = originalDuplicateTab.call(gBrowser, sourceTab, ...restArgs);
+      maybePlacePinnedDragDuplicate(sourceTab, duplicatedTab);
+      return duplicatedTab;
+    };
+
+    const onDragStart = event => {
+      activePinnedDragTabs = getDraggedPinnedTabs(event.target?.closest?.('.tabbrowser-tab'));
+    };
+    const onDropCapture = event => {
+      if (!activePinnedDragTabs.length || !isCopyDragOperation(event)) {
+        clearPendingPinnedDragDuplicatePlacement();
+        return;
+      }
+
+      const placement = getPinnedDropPlacement(event, activePinnedDragTabs[0]);
+
+      if (!placement) {
+        clearPendingPinnedDragDuplicatePlacement();
+        return;
+      }
+
+      queuePinnedDragDuplicatePlacement(activePinnedDragTabs, placement);
+    };
+    const resetDragState = () => {
+      activePinnedDragTabs = [];
+    };
+
+    tabContainer.addEventListener('dragstart', onDragStart, true);
+    tabContainer.addEventListener('drop', onDropCapture, true);
+    tabContainer.addEventListener('dragend', resetDragState, true);
+    tabContainer.addEventListener('drop', resetDragState);
+    tabContainer.__zenBrowserUtilitiesPinnedDuplicatePatched = true;
+    window.addEventListener('unload', () => {
+      tabContainer.removeEventListener('dragstart', onDragStart, true);
+      tabContainer.removeEventListener('drop', onDropCapture, true);
+      tabContainer.removeEventListener('dragend', resetDragState, true);
+      tabContainer.removeEventListener('drop', resetDragState);
+      gBrowser.duplicateTab = originalDuplicateTab;
+      clearPendingPinnedDragDuplicatePlacement();
+      activePinnedDragTabs = [];
+    }, { once: true });
   }
 
   function installDebugExportButton() {
@@ -1829,8 +2116,8 @@ import {
     duplicatePinnedBelow: () => duplicatePinnedTabBelow(),
     moveToWorkspacePrompt: () => promptMoveTabsToWorkspace(),
     copySelectedTabUrls: () => copySelectedTabUrls(),
+    copySelectedTabUrlsCsv: () => copySelectedTabUrlsCsv(),
     pasteTabUrls: () => pasteTabUrls(),
-    pasteTabUrlsCsv: () => pasteTabUrlsCsv(),
     closeStaleTabs: () => closeStaleTabsNow(),
     replacePinnedUrlWithCurrent: () => replacePinnedUrlWithCurrent(),
   };
@@ -1895,6 +2182,57 @@ import {
     }
   }
 
+  function createWorkspaceMenuItem(workspaceChoice) {
+    if (!workspaceChoice) {
+      return null;
+    }
+
+    const workspace = workspaceChoice.workspace;
+    const icon = workspace?.icon || '';
+    const label = icon && !icon.endsWith('.svg')
+      ? `${icon}${ICON_LABEL_SPACING}${workspaceChoice.label}`
+      : workspaceChoice.label;
+
+    if (
+      typeof gZenWorkspaces?.generateMenuItemForWorkspace === 'function' &&
+      workspace
+    ) {
+      const item = gZenWorkspaces.generateMenuItemForWorkspace(workspace);
+      item.setAttribute('label', label);
+      if (icon && icon.endsWith('.svg')) {
+        item.setAttribute('image', icon);
+        item.classList.add('zen-workspace-context-icon');
+      }
+      return item;
+    }
+
+    const item = document.createXULElement('menuitem');
+    item.className = 'zen-workspace-context-menu-item';
+    item.setAttribute('label', label);
+
+    if (icon && icon.endsWith('.svg')) {
+      item.setAttribute('image', icon);
+      item.classList.add('zen-workspace-context-icon');
+    }
+
+    return item;
+  }
+
+  function buildFolderContextMoveMenu(popupId, folders, handler) {
+    clearPopupChildren(popupId);
+    const popup = document.getElementById(popupId);
+
+    for (const folder of folders) {
+      const item = document.createXULElement('menuitem');
+      item.setAttribute('label', folder.label);
+      item.dataset.folderId = folder.id;
+      item.addEventListener('command', () => {
+        handler(folder.folder);
+      });
+      popup?.appendChild(item);
+    }
+  }
+
   function buildFolderMenu() {
     const folderAction = ACTIONS_BY_ID.get('moveToFolderPrompt');
     const folders = getAvailableFolders();
@@ -1925,8 +2263,10 @@ import {
     const popup = document.getElementById(MENU_IDS.moveToWorkspacePopup);
 
     for (const workspace of workspaces) {
-      const item = document.createXULElement('menuitem');
-      item.setAttribute('label', workspace.label);
+      const item = createWorkspaceMenuItem(workspace);
+      if (!item) {
+        continue;
+      }
       item.dataset.workspaceId = workspace.id;
       item.addEventListener('command', () => {
         void moveTabsToWorkspaceWithContainer(workspace.id);
@@ -1963,14 +2303,106 @@ import {
     setLinkContextActionHidden(action, !workspaces.length);
 
     for (const workspace of workspaces) {
-      const item = document.createXULElement('menuitem');
-      item.setAttribute('label', workspace.label);
+      const item = createWorkspaceMenuItem(workspace);
+      if (!item) {
+        continue;
+      }
       item.dataset.workspaceId = workspace.id;
       item.addEventListener('command', () => {
         openLinkInWorkspace(workspace.id);
       });
       popup?.appendChild(item);
     }
+  }
+
+  function updateFolderContextMenuVisibility(folder) {
+    const moveToTopItem = getMenuElementById(MENU_IDS.folderMoveToTop);
+    const moveBelowMenu = getMenuElementById(MENU_IDS.folderMoveBelow);
+    const moveInsideMenu = getMenuElementById(MENU_IDS.folderMoveInside);
+
+    if (!folder) {
+      moveToTopItem.hidden = true;
+      moveBelowMenu.hidden = true;
+      moveInsideMenu.hidden = true;
+      const separator = getMenuElementById(MENU_IDS.folderContextSeparator);
+      if (separator) {
+        separator.hidden = true;
+      }
+      return;
+    }
+
+    const choices = getFolderMoveChoices(folder);
+    const container = getWorkspacePinnedContainer(getWorkspaceIdForNode(folder));
+    const firstRootFolder = Array.from(container?.children || []).find(isFolderNode) || null;
+
+    moveToTopItem.hidden = false;
+    moveToTopItem.disabled = firstRootFolder === folder;
+
+    buildFolderContextMoveMenu(MENU_IDS.folderMoveBelowPopup, choices, targetFolder => {
+      moveFolderBelowFolder(folder, targetFolder);
+    });
+    buildFolderContextMoveMenu(MENU_IDS.folderMoveInsidePopup, choices, targetFolder => {
+      moveFolderInsideFolder(folder, targetFolder);
+    });
+
+    moveBelowMenu.hidden = !choices.length;
+    moveInsideMenu.hidden = !choices.length;
+    const separator = getMenuElementById(MENU_IDS.folderContextSeparator);
+    if (separator) {
+      separator.hidden = false;
+    }
+  }
+
+  function installFolderContextMenu() {
+    const folderContextMenu = document.getElementById('zenFolderActions');
+
+    if (!folderContextMenu) {
+      setTimeout(installFolderContextMenu, 500);
+      return;
+    }
+
+    if (document.getElementById(MENU_IDS.folderContextSeparator)) {
+      return;
+    }
+
+    const fragment = MozXULElement.parseXULToFragment(`
+      <menuseparator id="${MENU_IDS.folderContextSeparator}" hidden="true" />
+      <menuitem id="${MENU_IDS.folderMoveToTop}" label="Move to Top" hidden="true" />
+      <menu id="${MENU_IDS.folderMoveBelow}" label="Move Below Folder" hidden="true">
+        <menupopup id="${MENU_IDS.folderMoveBelowPopup}" />
+      </menu>
+      <menu id="${MENU_IDS.folderMoveInside}" label="Move Inside Folder" hidden="true">
+        <menupopup id="${MENU_IDS.folderMoveInsidePopup}" />
+      </menu>
+    `);
+    const anchor =
+      document.getElementById('context_zenFolderDelete') ||
+      document.getElementById('context_zenFolderChangeIcon');
+
+    if (anchor) {
+      anchor.before(fragment);
+    } else {
+      folderContextMenu.appendChild(fragment);
+    }
+
+    document.getElementById(MENU_IDS.folderMoveToTop).addEventListener('command', () => {
+      moveFolderToTop(currentFolderContextMenu);
+    });
+    folderContextMenu.addEventListener('popupshowing', event => {
+      if (event.target?.id !== 'zenFolderActions') {
+        return;
+      }
+
+      currentFolderContextMenu = getFolderContextTargetFolder(event.explicitOriginalTarget);
+      updateFolderContextMenuVisibility(currentFolderContextMenu);
+    });
+    folderContextMenu.addEventListener('popuphidden', event => {
+      if (event.target?.id !== 'zenFolderActions') {
+        return;
+      }
+
+      currentFolderContextMenu = null;
+    });
   }
 
   function updateMenuVisibility() {
@@ -2002,11 +2434,11 @@ import {
       false
     );
     setContextMenuActionHidden(
-      ACTIONS_BY_ID.get('pasteTabUrls'),
+      ACTIONS_BY_ID.get('copySelectedTabUrlsCsv'),
       false
     );
     setContextMenuActionHidden(
-      ACTIONS_BY_ID.get('pasteTabUrlsCsv'),
+      ACTIONS_BY_ID.get('pasteTabUrls'),
       false
     );
     setContextMenuActionHidden(
@@ -2074,8 +2506,8 @@ import {
       <menuitem id="${MENU_IDS.closeTabsAbove}" label="Close Tabs Above" />
       <menuitem id="${MENU_IDS.closeTabsBelow}" label="Close Tabs Below" />
       <menuitem id="${MENU_IDS.copySelectedTabUrls}" label="Copy Selected Tab Links" />
+      <menuitem id="${MENU_IDS.copySelectedTabUrlsCsv}" label="Copy Selected Tab Links as CSV" />
       <menuitem id="${MENU_IDS.pasteTabUrls}" label="Paste Links as Tabs" />
-      <menuitem id="${MENU_IDS.pasteTabUrlsCsv}" label="Paste CSV Links as Tabs" />
       <menu id="${MENU_IDS.moveToFolder}" label="Move to Folder">
         <menupopup id="${MENU_IDS.moveToFolderPopup}" />
       </menu>
@@ -2118,11 +2550,11 @@ import {
       .getElementById(MENU_IDS.copySelectedTabUrls)
       .addEventListener('command', () => executeAction('copySelectedTabUrls'));
     document
+      .getElementById(MENU_IDS.copySelectedTabUrlsCsv)
+      .addEventListener('command', () => executeAction('copySelectedTabUrlsCsv'));
+    document
       .getElementById(MENU_IDS.pasteTabUrls)
       .addEventListener('command', () => executeAction('pasteTabUrls'));
-    document
-      .getElementById(MENU_IDS.pasteTabUrlsCsv)
-      .addEventListener('command', () => executeAction('pasteTabUrlsCsv'));
     document
       .getElementById(MENU_IDS.moveOutOfFolder)
       .addEventListener('command', () => executeAction('moveOutOfFolder'));
@@ -2212,6 +2644,7 @@ import {
     if (isBrowserPage()) {
       installKeyboardFallback();
       installShortcutCommands();
+      installPinnedDragDuplicateHandler();
       void ensureCustomShortcutDefinitions().then(ready => {
         if (ready) {
           removeKeyboardFallback();
@@ -2225,6 +2658,7 @@ import {
         });
       }, { once: true });
       installContextMenu();
+      installFolderContextMenu();
       installLinkContextMenu();
       window.setInterval(() => {
         void maybeRunStaleTabsSweep();

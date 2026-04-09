@@ -13,6 +13,7 @@ This mod currently adds native-tab-menu integrations and optional keyboard short
 - Close tabs below
 - Move the current tab selection into another folder
 - Move the current tab selection out of the current folder
+- Move folders to the top, below another folder, or inside another folder from the native folder context menu
 - Duplicate a pinned tab directly below the original pinned tab
 - Open a right-clicked webpage link directly below the current pinned tab
 - Open a right-clicked webpage link into another folder
@@ -20,8 +21,8 @@ This mod currently adds native-tab-menu integrations and optional keyboard short
 - Replace pinned URL with Current
 - Re-open the current tab selection inside another Zen space using that space's assigned Firefox container
 - Copy all selected tab links as newline-delimited URLs
+- Copy all selected tab links as CSV rows with title and URL columns
 - Paste newline-delimited links as tabs
-- Paste CSV-formatted links as tabs
 - Close stale unpinned tabs now
 
 It also adds:
@@ -95,7 +96,7 @@ zen-browser-utilities.uc.js
 - Shortcut preferences default to blank strings so the mod does not claim any keyboard combinations until the user explicitly assigns them.
 - Shortcut assignments now live in Zen's native keyboard shortcut editor; any older Sine shortcut preference values are only used as one-time migration input for existing installs.
 - The mod now groups all of its custom shortcut rows under a single **Zen Browser Utilities** section at the top of Zen's native shortcut editor and replaces the broken fallback action-name rows that Zen would otherwise generate for unl10nized custom commands.
-- Folder and workspace destination actions are available in the native tab context menu, and the keyboard-triggered versions use a picker prompt so they remain assignable without inventing a separate context UI.
+- Folder and workspace destination actions are available in the native tab context menu, the folder right-click menu now adds folder move utilities, and the keyboard-triggered versions use picker prompts so they remain assignable without inventing a separate context UI.
 - Webpage link context-menu actions are available when right-clicking a real link, including opening directly below the current pinned tab, into another folder, or into another space's container.
 - Bulk close operations use a configurable batch size and delay so closing hundreds of tabs does not try to remove them all at once.
 - Automatic stale-tab cleanup only targets unpinned inactive tabs and skips selected, multiselected, essential, busy, pending, and optionally audible tabs.
