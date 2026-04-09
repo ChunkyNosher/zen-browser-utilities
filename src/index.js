@@ -95,7 +95,7 @@ import {
   const UNSAVED_CLASS = `${ZEN_CKS_CLASS_BASE}-unsaved`;
   const UNSAVED_INPUT_CLASS = `${ZEN_CKS_INPUT_FIELD_CLASS}-unsaved`;
   const DEBUG_LOG_MAX_ENTRIES = 500;
-  const FOLDER_CHOICE_INDENT = '  ';
+  const MENU_CHOICE_INDENT = '  ';
   // Keep the captured drop target alive briefly so duplicateTab can finish
   // firing after a Ctrl-drag copy without losing the intended pinned position.
   const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2_000;
@@ -762,11 +762,11 @@ import {
   }
 
   function getFolderDescendantIds(folder) {
-    return new Set(Array.from(folder?.querySelectorAll?.('zen-folder') || []).map(node => node.id));
+    return new Set(Array.from(folder?.querySelectorAll?.('zen-folder') || [], node => node.id));
   }
 
   function formatFolderChoiceLabel(folder) {
-    return `${FOLDER_CHOICE_INDENT.repeat(folder.level || 0)}${getFolderLabel(folder)}`;
+    return `${MENU_CHOICE_INDENT.repeat(folder.level || 0)}${getFolderLabel(folder)}`;
   }
 
   function getFolderMoveChoices(folder) {
@@ -1856,8 +1856,9 @@ import {
     picker.defaultExtension = 'json';
     picker.appendFilter('JSON', '*.json');
 
-    // nsIFilePicker.open is callback-based in the Firefox browser context, so wrap it to
-    // wait for the actual picker result instead of returning immediately.
+    // nsIFilePicker.open is callback-based in Firefox chrome code, unlike the
+    // Promise-returning version you might expect in other contexts, so wrap it
+    // to wait for the actual picker result instead of returning immediately.
     const result = await new Promise(resolve => {
       picker.open(resolve);
     });
