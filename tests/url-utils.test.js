@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
   extractUrlsFromCsvText,
+  formatRowsAsCsv,
   looksLikeUrl,
   parseLineSeparatedUrls,
 } from '../src/url-utils.js';
@@ -19,6 +20,15 @@ describe('url-utils', () => {
         'title,url\n"One","https://one.test"\n"Two","two.test/path"'
       )
     ).toEqual(['https://one.test', 'two.test/path']);
+  });
+
+  test('formats clipboard rows as CSV', () => {
+    expect(
+      formatRowsAsCsv([
+        ['Title', 'URL'],
+        ['One, "Two"', 'https://one.test'],
+      ])
+    ).toBe('Title,URL\n"One, ""Two""",https://one.test');
   });
 
   test('recognizes browser and web URLs', () => {

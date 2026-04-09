@@ -85,3 +85,17 @@ export function extractUrlsFromCsvText(text) {
       .filter(looksLikeUrl)
   );
 }
+
+function escapeCsvCell(value) {
+  const text = String(value ?? '');
+
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+
+  return text;
+}
+
+export function formatRowsAsCsv(rows) {
+  return rows.map(row => row.map(escapeCsvCell).join(',')).join('\n');
+}

@@ -60,14 +60,14 @@
     "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.contextMenu.pasteTabUrls",
-    "label": "Show “Paste Links as Tabs” in the tab right-click context menu",
+    "property": "zen-browser-utilities.contextMenu.copySelectedTabUrlsCsv",
+    "label": "Show “Copy Selected Tab Links as CSV” in the tab right-click context menu",
     "type": "checkbox",
     "defaultValue": true
   },
   {
-    "property": "zen-browser-utilities.contextMenu.pasteTabUrlsCsv",
-    "label": "Show “Paste CSV Links as Tabs” in the tab right-click context menu",
+    "property": "zen-browser-utilities.contextMenu.pasteTabUrls",
+    "label": "Show “Paste Links as Tabs” in the tab right-click context menu",
     "type": "checkbox",
     "defaultValue": true
   },

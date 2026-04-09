@@ -157,6 +157,17 @@
 			contextMenuMenuId: "copySelectedTabUrls"
 		},
 		{
+			id: "copySelectedTabUrlsCsv",
+			label: "Copy Selected Tab Links as CSV",
+			prefKey: "zen-browser-utilities.shortcuts.copySelectedTabUrlsCsv",
+			shortcutId: "zen-browser-utilities-shortcut-copy-selected-tab-links-as-csv",
+			commandId: "zen-browser-utilities-command-copy-selected-tab-links-as-csv",
+			shortcutGroup: "pageOperations",
+			contextMenuPrefKey: "zen-browser-utilities.contextMenu.copySelectedTabUrlsCsv",
+			contextMenuLabel: "Show “Copy Selected Tab Links as CSV” in the tab right-click context menu",
+			contextMenuMenuId: "copySelectedTabUrlsCsv"
+		},
+		{
 			id: "pasteTabUrls",
 			label: "Paste Links as Tabs",
 			prefKey: "zen-browser-utilities.shortcuts.pasteTabUrls",
@@ -166,17 +177,6 @@
 			contextMenuPrefKey: "zen-browser-utilities.contextMenu.pasteTabUrls",
 			contextMenuLabel: "Show “Paste Links as Tabs” in the tab right-click context menu",
 			contextMenuMenuId: "pasteTabUrls"
-		},
-		{
-			id: "pasteTabUrlsCsv",
-			label: "Paste CSV Links as Tabs",
-			prefKey: "zen-browser-utilities.shortcuts.pasteTabUrlsCsv",
-			shortcutId: "zen-browser-utilities-shortcut-paste-csv-links-as-tabs",
-			commandId: "zen-browser-utilities-command-paste-csv-links-as-tabs",
-			shortcutGroup: "pageOperations",
-			contextMenuPrefKey: "zen-browser-utilities.contextMenu.pasteTabUrlsCsv",
-			contextMenuLabel: "Show “Paste CSV Links as Tabs” in the tab right-click context menu",
-			contextMenuMenuId: "pasteTabUrlsCsv"
 		},
 		{
 			id: "closeStaleTabs",
@@ -435,54 +435,19 @@
 	}
 	//#endregion
 	//#region src/url-utils.js
-	var SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-	var DOMAIN_RE = /^(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:[/?#].*)?$/i;
 	function dedupeUrls(urls) {
 		return [...new Set(urls.filter(Boolean))];
-	}
-	function looksLikeUrl(value) {
-		const trimmed = value.trim();
-		if (!trimmed) return false;
-		return SCHEME_RE.test(trimmed) || DOMAIN_RE.test(trimmed) || trimmed.startsWith("about:") || trimmed.startsWith("chrome://");
 	}
 	function parseLineSeparatedUrls(text) {
 		return dedupeUrls(String(text ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
 	}
-	function parseCsvRows(text) {
-		const input = String(text ?? "");
-		const rows = [];
-		let row = [];
-		let cell = "";
-		let inQuotes = false;
-		for (let index = 0; index < input.length; index += 1) {
-			const character = input[index];
-			if (inQuotes) {
-				if (character === "\"") if (input[index + 1] === "\"") {
-					cell += "\"";
-					index += 1;
-				} else inQuotes = false;
-				else cell += character;
-				continue;
-			}
-			if (character === "\"") inQuotes = true;
-			else if (character === ",") {
-				row.push(cell);
-				cell = "";
-			} else if (character === "\n") {
-				row.push(cell);
-				rows.push(row);
-				row = [];
-				cell = "";
-			} else if (character !== "\r") cell += character;
-		}
-		if (cell.length || row.length) {
-			row.push(cell);
-			rows.push(row);
-		}
-		return rows;
+	function escapeCsvCell(value) {
+		const text = String(value ?? "");
+		if (/[",\r\n]/.test(text)) return `"${text.replaceAll("\"", "\"\"")}"`;
+		return text;
 	}
-	function extractUrlsFromCsvText(text) {
-		return dedupeUrls(parseCsvRows(text).flat().map((value) => value.trim()).filter(looksLikeUrl));
+	function formatRowsAsCsv(rows) {
+		return rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n");
 	}
 	//#endregion
 	//#region src/index.js
@@ -501,10 +466,16 @@
 			moveToWorkspace: "zen-browser-utilities-move-to-workspace",
 			moveToWorkspacePopup: "zen-browser-utilities-move-to-workspace-popup",
 			copySelectedTabUrls: "zen-browser-utilities-copy-selected-tab-urls",
+			copySelectedTabUrlsCsv: "zen-browser-utilities-copy-selected-tab-urls-csv",
 			pasteTabUrls: "zen-browser-utilities-paste-tab-urls",
-			pasteTabUrlsCsv: "zen-browser-utilities-paste-tab-urls-csv",
 			closeStaleTabs: "zen-browser-utilities-close-stale-tabs",
 			replacePinnedUrlWithCurrent: "zen-browser-utilities-replace-pinned-url-with-current",
+			folderContextSeparator: "zen-browser-utilities-folder-context-separator",
+			folderMoveToTop: "zen-browser-utilities-folder-move-to-top",
+			folderMoveBelow: "zen-browser-utilities-folder-move-below",
+			folderMoveBelowPopup: "zen-browser-utilities-folder-move-below-popup",
+			folderMoveInside: "zen-browser-utilities-folder-move-inside",
+			folderMoveInsidePopup: "zen-browser-utilities-folder-move-inside-popup",
 			linkSeparator: "zen-browser-utilities-link-context-separator",
 			openLinkBelowPinned: "zen-browser-utilities-open-link-below-pinned",
 			openLinkToFolder: "zen-browser-utilities-open-link-to-folder",
@@ -607,6 +578,7 @@
 		let activePinnedDragTabs = [];
 		let pendingPinnedDragDuplicatePlacement = null;
 		let pendingPinnedDragDuplicateTimer = 0;
+		let currentFolderContextMenu = null;
 		function isDebugLoggingEnabled() {
 			try {
 				return Services.prefs.getBoolPref(DEBUG_LOG_PREF, false);
@@ -923,6 +895,58 @@
 			if (index < 0) return false;
 			return moveTabsToFolder(folders[index].folder);
 		}
+		function isFolderNode(node) {
+			return node?.tagName?.toLowerCase?.() === "zen-folder" && node?.isZenFolder;
+		}
+		function getFolderContextTargetFolder(target) {
+			if (gBrowser?.isTabGroupLabel?.(target)) return target.group;
+			if (gBrowser?.isTabGroupLabel?.(target?.parentElement)) return target.parentElement.group;
+			if (target?.parentElement?.isZenFolder && target?.classList?.contains?.("tab-group-label-container")) return target.parentElement;
+			return null;
+		}
+		function getWorkspacePinnedContainer(workspaceId) {
+			return gZenWorkspaces?.workspaceElement?.(workspaceId)?.pinnedTabsContainer || gZenWorkspaces?.pinnedTabsContainer || null;
+		}
+		function getFolderDescendantIds(folder) {
+			return new Set(Array.from(folder?.querySelectorAll?.("zen-folder") || []).map((node) => node.id));
+		}
+		function formatFolderChoiceLabel(folder) {
+			return `${"\xA0\xA0".repeat(folder.level || 0)}${getFolderLabel(folder)}`;
+		}
+		function getFolderMoveChoices(folder) {
+			if (!folder) return [];
+			const workspaceId = getWorkspaceIdForNode(folder);
+			const excludedIds = getFolderDescendantIds(folder);
+			excludedIds.add(folder.id);
+			return Array.from(document.querySelectorAll("zen-folder")).filter((candidate) => {
+				return getWorkspaceIdForNode(candidate) === workspaceId && !excludedIds.has(candidate.id);
+			}).map((candidate) => ({
+				id: candidate.id,
+				label: formatFolderChoiceLabel(candidate),
+				folder: candidate
+			}));
+		}
+		function moveFolderToTop(folder) {
+			if (!folder) return false;
+			const container = getWorkspacePinnedContainer(getWorkspaceIdForNode(folder));
+			if (!container) return false;
+			const firstRootFolder = Array.from(container.children).find(isFolderNode) || null;
+			const separator = container.querySelector(".pinned-tabs-container-separator");
+			moveNode(folder, container, firstRootFolder || separator || null);
+			return true;
+		}
+		function moveFolderBelowFolder(folder, targetFolder) {
+			if (!folder || !targetFolder || folder === targetFolder || !targetFolder.parentElement) return false;
+			moveNode(folder, targetFolder.parentElement, targetFolder.nextElementSibling);
+			return true;
+		}
+		function moveFolderInsideFolder(folder, targetFolder) {
+			if (!folder || !targetFolder || folder === targetFolder || typeof targetFolder.addTabs !== "function") return false;
+			targetFolder.collapsed = false;
+			targetFolder.addTabs([folder]);
+			gBrowser?.tabContainer?._invalidateCachedTabs?.();
+			return true;
+		}
 		function getWorkspaceLabel(workspace) {
 			let label = workspace.name || workspace.uuid || "Workspace";
 			if (typeof workspace.containerTabId === "number" && typeof ContextualIdentityService?.getUserContextLabel === "function") {
@@ -1025,7 +1049,7 @@
 			let beforeNode = null;
 			if (targetElement) {
 				const rect = targetElement.getBoundingClientRect();
-				beforeNode = event.screenY > targetElement.screenY + rect.height / 2 ? targetElement.nextElementSibling : targetElement;
+				beforeNode = event.clientY > rect.top + rect.height / 2 ? targetElement.nextElementSibling : targetElement;
 			}
 			return {
 				parent,
@@ -1084,13 +1108,21 @@
 			});
 			return true;
 		}
-		function getTabUrls(tabs) {
-			return tabs.map((tab) => tab?.linkedBrowser?.currentURI?.spec || "").filter(Boolean);
+		function getTabClipboardRows(tabs) {
+			return tabs.map((tab) => ({
+				title: tab?.label || tab?.getAttribute?.("label") || "",
+				url: tab?.linkedBrowser?.currentURI?.spec || ""
+			})).filter((row) => row.url);
 		}
 		async function copySelectedTabUrls() {
-			const urls = getTabUrls(getSelectedTabsIfPossible());
-			if (!urls.length) return false;
-			return writeClipboardText(urls.join("\n"));
+			const rows = getTabClipboardRows(getSelectedTabsIfPossible());
+			if (!rows.length) return false;
+			return writeClipboardText(rows.map((row) => row.url).join("\n"));
+		}
+		async function copySelectedTabUrlsCsv() {
+			const rows = getTabClipboardRows(getSelectedTabsIfPossible());
+			if (!rows.length) return false;
+			return writeClipboardText(formatRowsAsCsv([["Title", "URL"], ...rows.map((row) => [row.title, row.url])]));
 		}
 		function getDestinationWorkspace(tab = getContextTab()) {
 			return getWorkspaceById(getWorkspaceIdForNode(tab));
@@ -1202,9 +1234,6 @@
 		}
 		async function pasteTabUrls() {
 			return createTabsInCurrentContext(parseLineSeparatedUrls(await readClipboardText("Paste links as tabs", "Paste newline-delimited links to open each one in a new tab.")));
-		}
-		async function pasteTabUrlsCsv() {
-			return createTabsInCurrentContext(extractUrlsFromCsvText(await readClipboardText("Paste CSV links as tabs", "Paste CSV text and every URL-like cell will open in a new tab.")));
 		}
 		function collectStaleTabs() {
 			return getStaleTabs(Array.from(gBrowser.tabs || []), {
@@ -1538,9 +1567,9 @@
 		function installPinnedDragDuplicateHandler() {
 			const tabContainer = gBrowser?.tabContainer;
 			if (!tabContainer || tabContainer.__zenBrowserUtilitiesPinnedDuplicatePatched) return;
-			const originalDuplicateTab = gBrowser.duplicateTab.bind(gBrowser);
+			const originalDuplicateTab = gBrowser.duplicateTab;
 			gBrowser.duplicateTab = (sourceTab, ...restArgs) => {
-				const duplicatedTab = originalDuplicateTab(sourceTab, ...restArgs);
+				const duplicatedTab = originalDuplicateTab.call(gBrowser, sourceTab, ...restArgs);
 				maybePlacePinnedDragDuplicate(sourceTab, duplicatedTab);
 				return duplicatedTab;
 			};
@@ -1572,6 +1601,7 @@
 				tabContainer.removeEventListener("drop", onDropCapture, true);
 				tabContainer.removeEventListener("dragend", resetDragState, true);
 				tabContainer.removeEventListener("drop", resetDragState);
+				gBrowser.duplicateTab = originalDuplicateTab;
 				clearPendingPinnedDragDuplicatePlacement();
 				activePinnedDragTabs = [];
 			}, { once: true });
@@ -1692,8 +1722,8 @@
 			duplicatePinnedBelow: () => duplicatePinnedTabBelow(),
 			moveToWorkspacePrompt: () => promptMoveTabsToWorkspace(),
 			copySelectedTabUrls: () => copySelectedTabUrls(),
+			copySelectedTabUrlsCsv: () => copySelectedTabUrlsCsv(),
 			pasteTabUrls: () => pasteTabUrls(),
-			pasteTabUrlsCsv: () => pasteTabUrlsCsv(),
 			closeStaleTabs: () => closeStaleTabsNow(),
 			replacePinnedUrlWithCurrent: () => replacePinnedUrlWithCurrent()
 		};
@@ -1729,6 +1759,42 @@
 			const popup = document.getElementById(popupId);
 			while (popup?.firstChild) popup.firstChild.remove();
 		}
+		function createWorkspaceMenuItem(workspaceChoice) {
+			if (!workspaceChoice) return null;
+			const workspace = workspaceChoice.workspace;
+			const icon = workspace?.icon || "";
+			const label = icon && !icon.endsWith(".svg") ? `${icon}  ${workspaceChoice.label}` : workspaceChoice.label;
+			if (typeof gZenWorkspaces?.generateMenuItemForWorkspace === "function" && workspace) {
+				const item = gZenWorkspaces.generateMenuItemForWorkspace(workspace);
+				item.setAttribute("label", label);
+				if (icon && icon.endsWith(".svg")) {
+					item.setAttribute("image", icon);
+					item.classList.add("zen-workspace-context-icon");
+				}
+				return item;
+			}
+			const item = document.createXULElement("menuitem");
+			item.className = "zen-workspace-context-menu-item";
+			item.setAttribute("label", label);
+			if (icon && icon.endsWith(".svg")) {
+				item.setAttribute("image", icon);
+				item.classList.add("zen-workspace-context-icon");
+			}
+			return item;
+		}
+		function buildFolderContextMoveMenu(popupId, folders, handler) {
+			clearPopupChildren(popupId);
+			const popup = document.getElementById(popupId);
+			for (const folder of folders) {
+				const item = document.createXULElement("menuitem");
+				item.setAttribute("label", folder.label);
+				item.dataset.folderId = folder.id;
+				item.addEventListener("command", () => {
+					handler(folder.folder);
+				});
+				popup?.appendChild(item);
+			}
+		}
 		function buildFolderMenu() {
 			const folderAction = ACTIONS_BY_ID.get("moveToFolderPrompt");
 			const folders = getAvailableFolders();
@@ -1752,8 +1818,8 @@
 			setContextMenuActionHidden(workspaceAction, workspaces.length < 1);
 			const popup = document.getElementById(MENU_IDS.moveToWorkspacePopup);
 			for (const workspace of workspaces) {
-				const item = document.createXULElement("menuitem");
-				item.setAttribute("label", workspace.label);
+				const item = createWorkspaceMenuItem(workspace);
+				if (!item) continue;
 				item.dataset.workspaceId = workspace.id;
 				item.addEventListener("command", () => {
 					moveTabsToWorkspaceWithContainer(workspace.id);
@@ -1782,14 +1848,75 @@
 			const popup = document.getElementById(MENU_IDS.openLinkToWorkspacePopup);
 			setLinkContextActionHidden(LINK_CONTEXT_ACTIONS_BY_ID.get("openLinkToWorkspace") || null, !workspaces.length);
 			for (const workspace of workspaces) {
-				const item = document.createXULElement("menuitem");
-				item.setAttribute("label", workspace.label);
+				const item = createWorkspaceMenuItem(workspace);
+				if (!item) continue;
 				item.dataset.workspaceId = workspace.id;
 				item.addEventListener("command", () => {
 					openLinkInWorkspace(workspace.id);
 				});
 				popup?.appendChild(item);
 			}
+		}
+		function updateFolderContextMenuVisibility(folder) {
+			const moveToTopItem = getMenuElementById(MENU_IDS.folderMoveToTop);
+			const moveBelowMenu = getMenuElementById(MENU_IDS.folderMoveBelow);
+			const moveInsideMenu = getMenuElementById(MENU_IDS.folderMoveInside);
+			if (!folder) {
+				moveToTopItem.hidden = true;
+				moveBelowMenu.hidden = true;
+				moveInsideMenu.hidden = true;
+				const separator = getMenuElementById(MENU_IDS.folderContextSeparator);
+				if (separator) separator.hidden = true;
+				return;
+			}
+			const choices = getFolderMoveChoices(folder);
+			const container = getWorkspacePinnedContainer(getWorkspaceIdForNode(folder));
+			const firstRootFolder = Array.from(container?.children || []).find(isFolderNode) || null;
+			moveToTopItem.hidden = false;
+			moveToTopItem.disabled = firstRootFolder === folder;
+			buildFolderContextMoveMenu(MENU_IDS.folderMoveBelowPopup, choices, (targetFolder) => {
+				moveFolderBelowFolder(folder, targetFolder);
+			});
+			buildFolderContextMoveMenu(MENU_IDS.folderMoveInsidePopup, choices, (targetFolder) => {
+				moveFolderInsideFolder(folder, targetFolder);
+			});
+			moveBelowMenu.hidden = !choices.length;
+			moveInsideMenu.hidden = !choices.length;
+			const separator = getMenuElementById(MENU_IDS.folderContextSeparator);
+			if (separator) separator.hidden = false;
+		}
+		function installFolderContextMenu() {
+			const folderContextMenu = document.getElementById("zenFolderActions");
+			if (!folderContextMenu) {
+				setTimeout(installFolderContextMenu, 500);
+				return;
+			}
+			if (document.getElementById(MENU_IDS.folderContextSeparator)) return;
+			const fragment = MozXULElement.parseXULToFragment(`
+      <menuseparator id="${MENU_IDS.folderContextSeparator}" hidden="true" />
+      <menuitem id="${MENU_IDS.folderMoveToTop}" label="Move to Top" hidden="true" />
+      <menu id="${MENU_IDS.folderMoveBelow}" label="Move Below Folder" hidden="true">
+        <menupopup id="${MENU_IDS.folderMoveBelowPopup}" />
+      </menu>
+      <menu id="${MENU_IDS.folderMoveInside}" label="Move Inside Folder" hidden="true">
+        <menupopup id="${MENU_IDS.folderMoveInsidePopup}" />
+      </menu>
+    `);
+			const anchor = document.getElementById("context_zenFolderDelete") || document.getElementById("context_zenFolderChangeIcon");
+			if (anchor) anchor.before(fragment);
+			else folderContextMenu.appendChild(fragment);
+			document.getElementById(MENU_IDS.folderMoveToTop).addEventListener("command", () => {
+				moveFolderToTop(currentFolderContextMenu);
+			});
+			folderContextMenu.addEventListener("popupshowing", (event) => {
+				if (event.target?.id !== "zenFolderActions") return;
+				currentFolderContextMenu = getFolderContextTargetFolder(event.explicitOriginalTarget);
+				updateFolderContextMenuVisibility(currentFolderContextMenu);
+			});
+			folderContextMenu.addEventListener("popuphidden", (event) => {
+				if (event.target?.id !== "zenFolderActions") return;
+				currentFolderContextMenu = null;
+			});
 		}
 		function updateMenuVisibility() {
 			const contextTab = getContextTab();
@@ -1807,8 +1934,8 @@
 			setContextMenuActionHidden(ACTIONS_BY_ID.get("closeTabsAbove"), !aboveTabs.length);
 			setContextMenuActionHidden(ACTIONS_BY_ID.get("closeTabsBelow"), !belowTabs.length);
 			setContextMenuActionHidden(ACTIONS_BY_ID.get("copySelectedTabUrls"), false);
+			setContextMenuActionHidden(ACTIONS_BY_ID.get("copySelectedTabUrlsCsv"), false);
 			setContextMenuActionHidden(ACTIONS_BY_ID.get("pasteTabUrls"), false);
-			setContextMenuActionHidden(ACTIONS_BY_ID.get("pasteTabUrlsCsv"), false);
 			setContextMenuActionHidden(ACTIONS_BY_ID.get("moveOutOfFolder"), !getCurrentFolder(contextTab));
 			setContextMenuActionHidden(ACTIONS_BY_ID.get("duplicatePinnedBelow"), !getSelectedPinnedTabs().length || getSelectedPinnedTabs().length !== getContextTabs().length);
 			setContextMenuActionHidden(ACTIONS_BY_ID.get("closeStaleTabs"), !collectStaleTabs().length);
@@ -1848,8 +1975,8 @@
       <menuitem id="${MENU_IDS.closeTabsAbove}" label="Close Tabs Above" />
       <menuitem id="${MENU_IDS.closeTabsBelow}" label="Close Tabs Below" />
       <menuitem id="${MENU_IDS.copySelectedTabUrls}" label="Copy Selected Tab Links" />
+      <menuitem id="${MENU_IDS.copySelectedTabUrlsCsv}" label="Copy Selected Tab Links as CSV" />
       <menuitem id="${MENU_IDS.pasteTabUrls}" label="Paste Links as Tabs" />
-      <menuitem id="${MENU_IDS.pasteTabUrlsCsv}" label="Paste CSV Links as Tabs" />
       <menu id="${MENU_IDS.moveToFolder}" label="Move to Folder">
         <menupopup id="${MENU_IDS.moveToFolderPopup}" />
       </menu>
@@ -1870,8 +1997,8 @@
 			document.getElementById(MENU_IDS.closeTabsAbove).addEventListener("command", () => executeAction("closeTabsAbove"));
 			document.getElementById(MENU_IDS.closeTabsBelow).addEventListener("command", () => executeAction("closeTabsBelow"));
 			document.getElementById(MENU_IDS.copySelectedTabUrls).addEventListener("command", () => executeAction("copySelectedTabUrls"));
+			document.getElementById(MENU_IDS.copySelectedTabUrlsCsv).addEventListener("command", () => executeAction("copySelectedTabUrlsCsv"));
 			document.getElementById(MENU_IDS.pasteTabUrls).addEventListener("command", () => executeAction("pasteTabUrls"));
-			document.getElementById(MENU_IDS.pasteTabUrlsCsv).addEventListener("command", () => executeAction("pasteTabUrlsCsv"));
 			document.getElementById(MENU_IDS.moveOutOfFolder).addEventListener("command", () => executeAction("moveOutOfFolder"));
 			document.getElementById(MENU_IDS.duplicatePinnedBelow).addEventListener("command", () => executeAction("duplicatePinnedBelow"));
 			document.getElementById(MENU_IDS.replacePinnedUrlWithCurrent).addEventListener("command", () => executeAction("replacePinnedUrlWithCurrent"));
@@ -1931,6 +2058,7 @@
 					});
 				}, { once: true });
 				installContextMenu();
+				installFolderContextMenu();
 				installLinkContextMenu();
 				window.setInterval(() => {
 					maybeRunStaleTabsSweep();
