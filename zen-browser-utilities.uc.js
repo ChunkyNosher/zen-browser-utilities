@@ -547,6 +547,7 @@
 			50,
 			200
 		];
+		const PINNED_DUPLICATE_REPOSITION_STATE_KEY = "__zenBrowserUtilitiesPinnedDuplicateRepositionState";
 		const DEBUG_LOG_EXPORT_BUTTON_ID = "zen-browser-utilities-export-debug-log";
 		const DEBUG_LOG_EXPORT_PANEL_ID = "zen-browser-utilities-export-debug-panel";
 		const DEBUG_LOG_PREF = "zen-browser-utilities.debug.enabled";
@@ -1126,15 +1127,47 @@
 			});
 			if (!pendingPlacement.sourceTabs.size) clearPendingPinnedDragDuplicatePlacement();
 		}
+		function clearPinnedDuplicateRepositionState(tab) {
+			const state = tab?.[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+			if (!state) return;
+			for (const timeoutId of state.timeoutIds) window.clearTimeout(timeoutId);
+			tab.removeEventListener("SSTabRestored", state.onRestored);
+			tab.removeEventListener("TabClose", state.cleanup);
+			delete tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+		}
 		function reinforcePinnedDuplicatePlacement(tab, placement) {
 			if (!tab || !placement?.parent) return false;
+			clearPinnedDuplicateRepositionState(tab);
 			const applyPlacement = () => {
 				if (!tab.isConnected || tab.closing) return false;
 				return placePinnedTab(tab, placement);
 			};
+			const timeoutIds = [];
+			const cleanup = () => {
+				clearPinnedDuplicateRepositionState(tab);
+			};
+			const onRestored = () => {
+				applyPlacement();
+			};
+			tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = {
+				cleanup,
+				onRestored,
+				timeoutIds
+			};
 			applyPlacement();
-			tab.addEventListener("SSTabRestored", applyPlacement, { once: true });
-			for (const delayMs of PINNED_DUPLICATE_REPOSITION_DELAYS_MS) window.setTimeout(applyPlacement, delayMs);
+			tab.addEventListener("SSTabRestored", onRestored, { once: true });
+			tab.addEventListener("TabClose", cleanup, { once: true });
+			for (const delayMs of PINNED_DUPLICATE_REPOSITION_DELAYS_MS) {
+				const timeoutId = window.setTimeout(() => {
+					const currentState = tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+					if (!currentState) return;
+					const timeoutIndex = currentState.timeoutIds.indexOf(timeoutId);
+					if (timeoutIndex >= 0) currentState.timeoutIds.splice(timeoutIndex, 1);
+					applyPlacement();
+					if (!currentState.timeoutIds.length) cleanup();
+				}, delayMs);
+				timeoutIds.push(timeoutId);
+			}
 			return true;
 		}
 		function getSelectedPinnedTabs() {
