@@ -282,7 +282,7 @@
 			Promise.resolve().then(() => picker.show()).then(resolve, reject);
 		});
 		if (typeof picker.show === "function") return Promise.resolve().then(() => picker.show());
-		return Promise.reject(/* @__PURE__ */ new TypeError("The file picker does not support open() or show()."));
+		return Promise.reject(/* @__PURE__ */ new TypeError("The file picker instance must implement either open() or show()."));
 	}
 	//#endregion
 	//#region src/link-context-utils.js

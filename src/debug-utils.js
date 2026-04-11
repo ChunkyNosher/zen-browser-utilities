@@ -86,5 +86,7 @@ export function openFilePicker(picker) {
     return Promise.resolve().then(() => picker.show());
   }
 
-  return Promise.reject(new TypeError('The file picker does not support open() or show().'));
+  return Promise.reject(
+    new TypeError('The file picker instance must implement either open() or show().')
+  );
 }
