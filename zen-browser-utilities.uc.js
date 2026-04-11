@@ -268,7 +268,7 @@
 			try {
 				picker.open({ done: settle });
 				return;
-			} catch (objectCallbackError) {
+			} catch {
 				try {
 					picker.open(settle);
 					return;
