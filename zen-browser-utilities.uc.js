@@ -281,7 +281,7 @@
 			}
 			Promise.resolve().then(() => picker.show()).then(resolve, reject);
 		});
-		if (typeof picker.show === "function") return Promise.resolve(picker.show());
+		if (typeof picker.show === "function") return Promise.resolve().then(() => picker.show());
 		return Promise.reject(/* @__PURE__ */ new TypeError("The file picker does not support open() or show()."));
 	}
 	//#endregion
@@ -1130,6 +1130,10 @@
 		function clearPinnedDuplicateRepositionState(tab) {
 			const state = tab?.[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
 			if (!state) return;
+			if (!(state.timeoutIds instanceof Set)) {
+				delete tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+				return;
+			}
 			for (const timeoutId of state.timeoutIds) window.clearTimeout(timeoutId);
 			state.timeoutIds.clear();
 			tab.removeEventListener("SSTabRestored", state.onRestored);

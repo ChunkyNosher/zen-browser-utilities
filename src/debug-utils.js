@@ -58,21 +58,28 @@ export function openFilePicker(picker) {
   }
 
   if (typeof picker.open === 'function') {
-    try {
-      return new Promise(resolve => {
-        picker.open({ done: resolve });
-      });
-    } catch {
+    return new Promise((resolve, reject) => {
+      const settle = result => resolve(result);
+
       try {
-        return new Promise(resolve => {
-          picker.open(resolve);
-        });
-      } catch (functionCallbackError) {
-        if (typeof picker.show !== 'function') {
-          return Promise.reject(functionCallbackError);
+        picker.open({ done: settle });
+        return;
+      } catch {
+        try {
+          picker.open(settle);
+          return;
+        } catch (functionCallbackError) {
+          if (typeof picker.show !== 'function') {
+            reject(functionCallbackError);
+            return;
+          }
         }
       }
-    }
+
+      Promise.resolve()
+        .then(() => picker.show())
+        .then(resolve, reject);
+    });
   }
 
   if (typeof picker.show === 'function') {
