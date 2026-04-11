@@ -258,7 +258,7 @@
 	* callback. Fall back to `show()` if needed so callers can reliably await a
 	* result code.
 	*
-	* @param {object} picker
+	* @param {{ open?: Function, show?: Function }} picker
 	* @returns {Promise<number>}
 	*/
 	function openFilePicker(picker) {
@@ -1131,6 +1131,7 @@
 			const state = tab?.[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
 			if (!state) return;
 			for (const timeoutId of state.timeoutIds) window.clearTimeout(timeoutId);
+			state.timeoutIds.clear();
 			tab.removeEventListener("SSTabRestored", state.onRestored);
 			tab.removeEventListener("TabClose", state.cleanup);
 			delete tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
@@ -1142,7 +1143,7 @@
 				if (!tab.isConnected || tab.closing) return false;
 				return placePinnedTab(tab, placement);
 			};
-			const timeoutIds = [];
+			const timeoutIds = /* @__PURE__ */ new Set();
 			const cleanup = () => {
 				clearPinnedDuplicateRepositionState(tab);
 			};
@@ -1161,12 +1162,11 @@
 				const timeoutId = window.setTimeout(() => {
 					const currentState = tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
 					if (!currentState) return;
-					const timeoutIndex = currentState.timeoutIds.indexOf(timeoutId);
-					if (timeoutIndex >= 0) currentState.timeoutIds.splice(timeoutIndex, 1);
+					currentState.timeoutIds.delete(timeoutId);
 					applyPlacement();
-					if (!currentState.timeoutIds.length) cleanup();
+					if (!currentState.timeoutIds.size) cleanup();
 				}, delayMs);
-				timeoutIds.push(timeoutId);
+				timeoutIds.add(timeoutId);
 			}
 			return true;
 		}
