@@ -23,7 +23,11 @@ import {
 } from './action-model.js';
 import { ACTIONS, ACTIONS_BY_ID } from './action-definitions.js';
 import { chunkItems, parsePositiveInteger } from './batch-utils.js';
-import { createDebugSnapshot, limitDebugEntries } from './debug-utils.js';
+import {
+  createDebugSnapshot,
+  limitDebugEntries,
+  openFilePicker,
+} from './debug-utils.js';
 import {
   getLinkContextVisibilityState,
   getLinkUrlFromContextMenu,
@@ -100,6 +104,7 @@ import {
   // Keep the captured drop target alive briefly so duplicateTab can finish
   // firing after a Ctrl-drag copy without losing the intended pinned position.
   const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2_000;
+  const PINNED_DUPLICATE_REPOSITION_DELAYS_MS = [0, 50, 200];
   const DEBUG_LOG_EXPORT_BUTTON_ID = 'zen-browser-utilities-export-debug-log';
   const DEBUG_LOG_EXPORT_PANEL_ID = 'zen-browser-utilities-export-debug-panel';
   const DEBUG_LOG_PREF = 'zen-browser-utilities.debug.enabled';
@@ -1089,7 +1094,7 @@ import {
     }
 
     pendingPlacement.sourceTabs.delete(sourceTab);
-    placePinnedTab(duplicatedTab, {
+    reinforcePinnedDuplicatePlacement(duplicatedTab, {
       ...pendingPlacement.placement,
       workspaceId:
         pendingPlacement.placement.workspaceId || getWorkspaceIdForNode(sourceTab),
@@ -1098,6 +1103,29 @@ import {
     if (!pendingPlacement.sourceTabs.size) {
       clearPendingPinnedDragDuplicatePlacement();
     }
+  }
+
+  function reinforcePinnedDuplicatePlacement(tab, placement) {
+    if (!tab || !placement?.parent) {
+      return false;
+    }
+
+    const applyPlacement = () => {
+      if (!tab.isConnected || tab.closing) {
+        return false;
+      }
+
+      return placePinnedTab(tab, placement);
+    };
+
+    applyPlacement();
+    tab.addEventListener('SSTabRestored', applyPlacement, { once: true });
+
+    for (const delayMs of PINNED_DUPLICATE_REPOSITION_DELAYS_MS) {
+      window.setTimeout(applyPlacement, delayMs);
+    }
+
+    return true;
   }
 
   function getSelectedPinnedTabs() {
@@ -1135,7 +1163,7 @@ import {
     for (const originalTab of originalTabs) {
       const duplicatedTab = gBrowser.duplicateTab(originalTab, true);
 
-      placePinnedTab(duplicatedTab, {
+      reinforcePinnedDuplicatePlacement(duplicatedTab, {
         parent: originalTab.parentElement,
         beforeNode: originalTab.nextElementSibling,
         workspaceId: getWorkspaceIdForNode(originalTab),
@@ -1857,12 +1885,7 @@ import {
     picker.defaultExtension = 'json';
     picker.appendFilter('JSON', '*.json');
 
-    // nsIFilePicker.open is callback-based in Firefox chrome code, unlike the
-    // Promise-returning version you might expect in other contexts, so wrap it
-    // to wait for the actual picker result instead of returning immediately.
-    const result = await new Promise(resolve => {
-      picker.open(resolve);
-    });
+    const result = await openFilePicker(picker);
 
     if (
       result !== Ci.nsIFilePicker.returnOK &&
