@@ -1117,6 +1117,7 @@ import {
     for (const timeoutId of state.timeoutIds) {
       window.clearTimeout(timeoutId);
     }
+    state.timeoutIds.clear();
 
     tab.removeEventListener('SSTabRestored', state.onRestored);
     tab.removeEventListener('TabClose', state.cleanup);
@@ -1137,7 +1138,7 @@ import {
 
       return placePinnedTab(tab, placement);
     };
-    const timeoutIds = [];
+    const timeoutIds = new Set();
     const cleanup = () => {
       clearPinnedDuplicateRepositionState(tab);
     };
@@ -1163,19 +1164,15 @@ import {
           return;
         }
 
-        const timeoutIndex = currentState.timeoutIds.indexOf(timeoutId);
-
-        if (timeoutIndex >= 0) {
-          currentState.timeoutIds.splice(timeoutIndex, 1);
-        }
+        currentState.timeoutIds.delete(timeoutId);
         applyPlacement();
 
-        if (!currentState.timeoutIds.length) {
+        if (!currentState.timeoutIds.size) {
           cleanup();
         }
       }, delayMs);
 
-      timeoutIds.push(timeoutId);
+      timeoutIds.add(timeoutId);
     }
 
     return true;

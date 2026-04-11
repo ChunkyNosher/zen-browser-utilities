@@ -49,7 +49,7 @@ export function createDebugSnapshot({
  * callback. Fall back to `show()` if needed so callers can reliably await a
  * result code.
  *
- * @param {object} picker
+ * @param {{ open?: Function, show?: Function }} picker
  * @returns {Promise<number>}
  */
 export function openFilePicker(picker) {
