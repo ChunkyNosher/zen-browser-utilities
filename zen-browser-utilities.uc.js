@@ -250,6 +250,40 @@
 			preferences
 		};
 	}
+	/**
+	* Open an nsIFilePicker using whichever API shape the current Firefox build
+	* exposes.
+	*
+	* Some builds expect `open({ done() {} })`, while others accept a bare
+	* callback. Fall back to `show()` if needed so callers can reliably await a
+	* result code.
+	*
+	* @param {object} picker
+	* @returns {Promise<number>}
+	*/
+	function openFilePicker(picker) {
+		if (!picker) return Promise.reject(/* @__PURE__ */ new TypeError("A file picker instance is required."));
+		if (typeof picker.open === "function") return new Promise((resolve, reject) => {
+			const settle = (result) => resolve(result);
+			try {
+				picker.open({ done: settle });
+				return;
+			} catch (objectCallbackError) {
+				try {
+					picker.open(settle);
+					return;
+				} catch (functionCallbackError) {
+					if (typeof picker.show !== "function") {
+						reject(functionCallbackError);
+						return;
+					}
+				}
+			}
+			Promise.resolve().then(() => picker.show()).then(resolve, reject);
+		});
+		if (typeof picker.show === "function") return Promise.resolve(picker.show());
+		return Promise.reject(/* @__PURE__ */ new TypeError("The file picker does not support open() or show()."));
+	}
 	//#endregion
 	//#region src/link-context-utils.js
 	function getLinkUrlFromContextMenu(contextMenu) {
@@ -508,6 +542,11 @@
 		const ICON_LABEL_SPACING = "  ";
 		const MENU_CHOICE_INDENT = "  ";
 		const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2e3;
+		const PINNED_DUPLICATE_REPOSITION_DELAYS_MS = [
+			0,
+			50,
+			200
+		];
 		const DEBUG_LOG_EXPORT_BUTTON_ID = "zen-browser-utilities-export-debug-log";
 		const DEBUG_LOG_EXPORT_PANEL_ID = "zen-browser-utilities-export-debug-panel";
 		const DEBUG_LOG_PREF = "zen-browser-utilities.debug.enabled";
@@ -1081,11 +1120,22 @@
 			const pendingPlacement = pendingPinnedDragDuplicatePlacement;
 			if (!pendingPlacement?.sourceTabs?.has(sourceTab)) return;
 			pendingPlacement.sourceTabs.delete(sourceTab);
-			placePinnedTab(duplicatedTab, {
+			reinforcePinnedDuplicatePlacement(duplicatedTab, {
 				...pendingPlacement.placement,
 				workspaceId: pendingPlacement.placement.workspaceId || getWorkspaceIdForNode(sourceTab)
 			});
 			if (!pendingPlacement.sourceTabs.size) clearPendingPinnedDragDuplicatePlacement();
+		}
+		function reinforcePinnedDuplicatePlacement(tab, placement) {
+			if (!tab || !placement?.parent) return false;
+			const applyPlacement = () => {
+				if (!tab.isConnected || tab.closing) return false;
+				return placePinnedTab(tab, placement);
+			};
+			applyPlacement();
+			tab.addEventListener("SSTabRestored", applyPlacement, { once: true });
+			for (const delayMs of PINNED_DUPLICATE_REPOSITION_DELAYS_MS) window.setTimeout(applyPlacement, delayMs);
+			return true;
 		}
 		function getSelectedPinnedTabs() {
 			return getContextTabs().filter((tab) => tab?.pinned);
@@ -1103,7 +1153,7 @@
 		function duplicatePinnedTabBelow() {
 			const originalTabs = getSelectedPinnedTabs();
 			if (!originalTabs.length || originalTabs.length !== getContextTabs().length) return false;
-			for (const originalTab of originalTabs) placePinnedTab(gBrowser.duplicateTab(originalTab, true), {
+			for (const originalTab of originalTabs) reinforcePinnedDuplicatePlacement(gBrowser.duplicateTab(originalTab, true), {
 				parent: originalTab.parentElement,
 				beforeNode: originalTab.nextElementSibling,
 				workspaceId: getWorkspaceIdForNode(originalTab)
@@ -1547,9 +1597,7 @@
 			picker.defaultString = `zen-browser-utilities-debug-log-${filenameTimestamp}.json`;
 			picker.defaultExtension = "json";
 			picker.appendFilter("JSON", "*.json");
-			const result = await new Promise((resolve) => {
-				picker.open(resolve);
-			});
+			const result = await openFilePicker(picker);
 			if (result !== Ci.nsIFilePicker.returnOK && result !== Ci.nsIFilePicker.returnReplace) return false;
 			const snapshot = createDebugSnapshot({
 				exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
