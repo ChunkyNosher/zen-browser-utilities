@@ -58,32 +58,25 @@ export function openFilePicker(picker) {
   }
 
   if (typeof picker.open === 'function') {
-    return new Promise((resolve, reject) => {
-      const settle = result => resolve(result);
-
+    try {
+      return new Promise(resolve => {
+        picker.open({ done: resolve });
+      });
+    } catch {
       try {
-        picker.open({ done: settle });
-        return;
-      } catch {
-        try {
-          picker.open(settle);
-          return;
-        } catch (functionCallbackError) {
-          if (typeof picker.show !== 'function') {
-            reject(functionCallbackError);
-            return;
-          }
+        return new Promise(resolve => {
+          picker.open(resolve);
+        });
+      } catch (functionCallbackError) {
+        if (typeof picker.show !== 'function') {
+          return Promise.reject(functionCallbackError);
         }
       }
-
-      Promise.resolve()
-        .then(() => picker.show())
-        .then(resolve, reject);
-    });
+    }
   }
 
   if (typeof picker.show === 'function') {
-    return Promise.resolve(picker.show());
+    return Promise.resolve().then(() => picker.show());
   }
 
   return Promise.reject(new TypeError('The file picker does not support open() or show().'));

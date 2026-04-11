@@ -1114,6 +1114,11 @@ import {
       return;
     }
 
+    if (!(state.timeoutIds instanceof Set)) {
+      delete tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+      return;
+    }
+
     for (const timeoutId of state.timeoutIds) {
       window.clearTimeout(timeoutId);
     }
