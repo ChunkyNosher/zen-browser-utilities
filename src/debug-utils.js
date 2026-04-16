@@ -40,3 +40,47 @@ export function createDebugSnapshot({
     preferences,
   };
 }
+
+/**
+ * Open an nsIFilePicker using whichever API shape the current Firefox build
+ * exposes.
+ *
+ * Some builds expect `open({ done() {} })`, while others accept a bare
+ * callback. Fall back to `show()` if needed so callers can reliably await a
+ * result code.
+ *
+ * @param {{ open?: Function, show?: Function }} picker
+ * @returns {Promise<number>}
+ */
+export function openFilePicker(picker) {
+  if (!picker) {
+    return Promise.reject(new TypeError('picker parameter cannot be null or undefined.'));
+  }
+
+  if (typeof picker.show === 'function') {
+    return Promise.resolve().then(() => picker.show());
+  }
+
+  if (typeof picker.open === 'function') {
+    return new Promise((resolve, reject) => {
+      try {
+        picker.open({ done: resolve });
+      } catch (doneCallbackError) {
+        try {
+          picker.open(resolve);
+        } catch (functionCallbackError) {
+          reject(
+            new AggregateError(
+              [doneCallbackError, functionCallbackError],
+              'Failed to open the file picker.'
+            )
+          );
+        }
+      }
+    });
+  }
+
+  return Promise.reject(
+    new TypeError('The file picker instance must implement either open() or show().')
+  );
+}

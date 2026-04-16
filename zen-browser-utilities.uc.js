@@ -250,6 +250,33 @@
 			preferences
 		};
 	}
+	/**
+	* Open an nsIFilePicker using whichever API shape the current Firefox build
+	* exposes.
+	*
+	* Some builds expect `open({ done() {} })`, while others accept a bare
+	* callback. Fall back to `show()` if needed so callers can reliably await a
+	* result code.
+	*
+	* @param {{ open?: Function, show?: Function }} picker
+	* @returns {Promise<number>}
+	*/
+	function openFilePicker(picker) {
+		if (!picker) return Promise.reject(/* @__PURE__ */ new TypeError("picker parameter cannot be null or undefined."));
+		if (typeof picker.show === "function") return Promise.resolve().then(() => picker.show());
+		if (typeof picker.open === "function") return new Promise((resolve, reject) => {
+			try {
+				picker.open({ done: resolve });
+			} catch (doneCallbackError) {
+				try {
+					picker.open(resolve);
+				} catch (functionCallbackError) {
+					reject(new AggregateError([doneCallbackError, functionCallbackError], "Failed to open the file picker."));
+				}
+			}
+		});
+		return Promise.reject(/* @__PURE__ */ new TypeError("The file picker instance must implement either open() or show()."));
+	}
 	//#endregion
 	//#region src/link-context-utils.js
 	function getLinkUrlFromContextMenu(contextMenu) {
@@ -508,6 +535,13 @@
 		const ICON_LABEL_SPACING = "  ";
 		const MENU_CHOICE_INDENT = "  ";
 		const PINNED_DRAG_DUPLICATE_PLACEMENT_TIMEOUT_MS = 2e3;
+		const PINNED_DUPLICATE_REPOSITION_DELAYS_MS = [
+			0,
+			50,
+			200
+		];
+		const PINNED_DUPLICATE_RESTORE_GUARD_TIMEOUT_MS = 5e3;
+		const PINNED_DUPLICATE_REPOSITION_STATE_KEY = "__zenBrowserUtilitiesPinnedDuplicateRepositionState";
 		const DEBUG_LOG_EXPORT_BUTTON_ID = "zen-browser-utilities-export-debug-log";
 		const DEBUG_LOG_EXPORT_PANEL_ID = "zen-browser-utilities-export-debug-panel";
 		const DEBUG_LOG_PREF = "zen-browser-utilities.debug.enabled";
@@ -1081,11 +1115,74 @@
 			const pendingPlacement = pendingPinnedDragDuplicatePlacement;
 			if (!pendingPlacement?.sourceTabs?.has(sourceTab)) return;
 			pendingPlacement.sourceTabs.delete(sourceTab);
-			placePinnedTab(duplicatedTab, {
+			reinforcePinnedDuplicatePlacement(duplicatedTab, {
 				...pendingPlacement.placement,
 				workspaceId: pendingPlacement.placement.workspaceId || getWorkspaceIdForNode(sourceTab)
 			});
 			if (!pendingPlacement.sourceTabs.size) clearPendingPinnedDragDuplicatePlacement();
+		}
+		function clearPinnedDuplicateRepositionState(tab) {
+			const state = tab?.[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+			if (!state) return;
+			if (!(state.timeoutIds instanceof Set)) {
+				delete tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+				return;
+			}
+			for (const timeoutId of state.timeoutIds) window.clearTimeout(timeoutId);
+			state.timeoutIds.clear();
+			if (state.restoreGuardTimeoutId !== null) window.clearTimeout(state.restoreGuardTimeoutId);
+			tab.removeEventListener("SSTabRestored", state.onRestored);
+			tab.removeEventListener("TabClose", state.cleanup);
+			delete tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+		}
+		function reinforcePinnedDuplicatePlacement(tab, placement) {
+			if (!tab || !placement?.parent) return false;
+			clearPinnedDuplicateRepositionState(tab);
+			const applyPlacement = () => {
+				if (!tab.isConnected || tab.closing) return false;
+				return placePinnedTab(tab, placement);
+			};
+			let state = null;
+			const cleanup = () => {
+				clearPinnedDuplicateRepositionState(tab);
+			};
+			const maybeCleanup = () => {
+				if (tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state || !state.restored || state.timeoutIds.size) return;
+				cleanup();
+			};
+			const onRestored = () => {
+				if (tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state) return;
+				state.restored = true;
+				applyPlacement();
+				maybeCleanup();
+			};
+			state = {
+				cleanup,
+				onRestored,
+				restored: false,
+				restoreGuardTimeoutId: null,
+				timeoutIds: /* @__PURE__ */ new Set()
+			};
+			tab.addEventListener("SSTabRestored", onRestored, { once: true });
+			tab.addEventListener("TabClose", cleanup, { once: true });
+			tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = state;
+			state.restoreGuardTimeoutId = window.setTimeout(() => {
+				if (tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state) return;
+				state.restored = true;
+				maybeCleanup();
+			}, PINNED_DUPLICATE_RESTORE_GUARD_TIMEOUT_MS);
+			applyPlacement();
+			for (const delayMs of PINNED_DUPLICATE_REPOSITION_DELAYS_MS) {
+				const timeoutId = window.setTimeout(() => {
+					const currentState = tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
+					if (currentState !== state) return;
+					currentState.timeoutIds.delete(timeoutId);
+					applyPlacement();
+					maybeCleanup();
+				}, delayMs);
+				state.timeoutIds.add(timeoutId);
+			}
+			return true;
 		}
 		function getSelectedPinnedTabs() {
 			return getContextTabs().filter((tab) => tab?.pinned);
@@ -1103,7 +1200,7 @@
 		function duplicatePinnedTabBelow() {
 			const originalTabs = getSelectedPinnedTabs();
 			if (!originalTabs.length || originalTabs.length !== getContextTabs().length) return false;
-			for (const originalTab of originalTabs) placePinnedTab(gBrowser.duplicateTab(originalTab, true), {
+			for (const originalTab of originalTabs) reinforcePinnedDuplicatePlacement(gBrowser.duplicateTab(originalTab, true), {
 				parent: originalTab.parentElement,
 				beforeNode: originalTab.nextElementSibling,
 				workspaceId: getWorkspaceIdForNode(originalTab)
@@ -1547,9 +1644,7 @@
 			picker.defaultString = `zen-browser-utilities-debug-log-${filenameTimestamp}.json`;
 			picker.defaultExtension = "json";
 			picker.appendFilter("JSON", "*.json");
-			const result = await new Promise((resolve) => {
-				picker.open(resolve);
-			});
+			const result = await openFilePicker(picker);
 			if (result !== Ci.nsIFilePicker.returnOK && result !== Ci.nsIFilePicker.returnReplace) return false;
 			const snapshot = createDebugSnapshot({
 				exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
