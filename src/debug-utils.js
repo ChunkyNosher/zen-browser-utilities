@@ -57,31 +57,22 @@ export function openFilePicker(picker) {
     return Promise.reject(new TypeError('A file picker instance is required.'));
   }
 
+  if (typeof picker.show === 'function') {
+    return Promise.resolve().then(() => picker.show());
+  }
+
   if (typeof picker.open === 'function') {
     return new Promise((resolve, reject) => {
       try {
         picker.open({ done: resolve });
-        return;
       } catch {
         try {
           picker.open(resolve);
-          return;
         } catch (functionCallbackError) {
-          if (typeof picker.show !== 'function') {
-            reject(functionCallbackError);
-            return;
-          }
+          reject(functionCallbackError);
         }
       }
-
-      Promise.resolve()
-        .then(() => picker.show())
-        .then(resolve, reject);
     });
-  }
-
-  if (typeof picker.show === 'function') {
-    return Promise.resolve().then(() => picker.show());
   }
 
   return Promise.reject(

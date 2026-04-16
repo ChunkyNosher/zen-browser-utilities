@@ -1124,7 +1124,7 @@ import {
       window.clearTimeout(timeoutId);
     }
     state.timeoutIds.clear();
-    if (state.restoreGuardTimeoutId) {
+    if (state.restoreGuardTimeoutId !== null) {
       window.clearTimeout(state.restoreGuardTimeoutId);
     }
 
@@ -1146,11 +1146,6 @@ import {
       }
 
       return placePinnedTab(tab, placement);
-    };
-    const state = {
-      restored: false,
-      restoreGuardTimeoutId: 0,
-      timeoutIds: new Set(),
     };
     const cleanup = () => {
       clearPinnedDuplicateRepositionState(tab);
@@ -1175,11 +1170,13 @@ import {
       applyPlacement();
       maybeCleanup();
     };
-
-    Object.assign(state, {
+    const state = {
       cleanup,
       onRestored,
-    });
+      restored: false,
+      restoreGuardTimeoutId: null,
+      timeoutIds: new Set(),
+    };
     tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = state;
 
     tab.addEventListener('SSTabRestored', onRestored, { once: true });
