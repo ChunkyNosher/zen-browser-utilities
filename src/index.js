@@ -1177,10 +1177,10 @@ import {
       restoreGuardTimeoutId: null,
       timeoutIds: new Set(),
     };
-    tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = state;
 
     tab.addEventListener('SSTabRestored', onRestored, { once: true });
     tab.addEventListener('TabClose', cleanup, { once: true });
+    tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = state;
     state.restoreGuardTimeoutId = window.setTimeout(() => {
       if (tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state) {
         return;

@@ -65,11 +65,11 @@ export function openFilePicker(picker) {
     return new Promise((resolve, reject) => {
       try {
         picker.open({ done: resolve });
-      } catch {
+      } catch (doneCallbackError) {
         try {
           picker.open(resolve);
         } catch (functionCallbackError) {
-          reject(functionCallbackError);
+          reject(functionCallbackError ?? doneCallbackError);
         }
       }
     });
