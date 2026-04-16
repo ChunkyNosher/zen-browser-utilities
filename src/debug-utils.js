@@ -59,14 +59,12 @@ export function openFilePicker(picker) {
 
   if (typeof picker.open === 'function') {
     return new Promise((resolve, reject) => {
-      const settle = result => resolve(result);
-
       try {
-        picker.open({ done: settle });
+        picker.open({ done: resolve });
         return;
       } catch {
         try {
-          picker.open(settle);
+          picker.open(resolve);
           return;
         } catch (functionCallbackError) {
           if (typeof picker.show !== 'function') {

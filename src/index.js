@@ -1156,9 +1156,11 @@ import {
       clearPinnedDuplicateRepositionState(tab);
     };
     const maybeCleanup = () => {
-      const currentState = tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
-
-      if (currentState !== state || !state.restored || state.timeoutIds.size) {
+      if (
+        tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state ||
+        !state.restored ||
+        state.timeoutIds.size
+      ) {
         return;
       }
 
