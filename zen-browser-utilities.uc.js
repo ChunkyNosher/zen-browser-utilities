@@ -547,6 +547,7 @@
 			50,
 			200
 		];
+		const PINNED_DUPLICATE_RESTORE_GUARD_TIMEOUT_MS = 5e3;
 		const PINNED_DUPLICATE_REPOSITION_STATE_KEY = "__zenBrowserUtilitiesPinnedDuplicateRepositionState";
 		const DEBUG_LOG_EXPORT_BUTTON_ID = "zen-browser-utilities-export-debug-log";
 		const DEBUG_LOG_EXPORT_PANEL_ID = "zen-browser-utilities-export-debug-panel";
@@ -1136,6 +1137,7 @@
 			}
 			for (const timeoutId of state.timeoutIds) window.clearTimeout(timeoutId);
 			state.timeoutIds.clear();
+			if (state.restoreGuardTimeoutId) window.clearTimeout(state.restoreGuardTimeoutId);
 			tab.removeEventListener("SSTabRestored", state.onRestored);
 			tab.removeEventListener("TabClose", state.cleanup);
 			delete tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
@@ -1147,30 +1149,46 @@
 				if (!tab.isConnected || tab.closing) return false;
 				return placePinnedTab(tab, placement);
 			};
-			const timeoutIds = /* @__PURE__ */ new Set();
+			const state = {
+				restored: false,
+				restoreGuardTimeoutId: 0,
+				timeoutIds: /* @__PURE__ */ new Set()
+			};
 			const cleanup = () => {
 				clearPinnedDuplicateRepositionState(tab);
 			};
+			const maybeCleanup = () => {
+				if (tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state || !state.restored || state.timeoutIds.size) return;
+				cleanup();
+			};
 			const onRestored = () => {
+				if (tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state) return;
+				state.restored = true;
 				applyPlacement();
+				maybeCleanup();
 			};
-			tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = {
+			Object.assign(state, {
 				cleanup,
-				onRestored,
-				timeoutIds
-			};
-			applyPlacement();
+				onRestored
+			});
+			tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = state;
 			tab.addEventListener("SSTabRestored", onRestored, { once: true });
 			tab.addEventListener("TabClose", cleanup, { once: true });
+			state.restoreGuardTimeoutId = window.setTimeout(() => {
+				if (tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state) return;
+				state.restored = true;
+				maybeCleanup();
+			}, PINNED_DUPLICATE_RESTORE_GUARD_TIMEOUT_MS);
+			applyPlacement();
 			for (const delayMs of PINNED_DUPLICATE_REPOSITION_DELAYS_MS) {
 				const timeoutId = window.setTimeout(() => {
 					const currentState = tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
-					if (!currentState) return;
+					if (currentState !== state) return;
 					currentState.timeoutIds.delete(timeoutId);
 					applyPlacement();
-					if (!currentState.timeoutIds.size) cleanup();
+					maybeCleanup();
 				}, delayMs);
-				timeoutIds.add(timeoutId);
+				state.timeoutIds.add(timeoutId);
 			}
 			return true;
 		}
