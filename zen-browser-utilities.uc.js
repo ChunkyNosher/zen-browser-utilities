@@ -263,24 +263,18 @@
 	*/
 	function openFilePicker(picker) {
 		if (!picker) return Promise.reject(/* @__PURE__ */ new TypeError("A file picker instance is required."));
+		if (typeof picker.show === "function") return Promise.resolve().then(() => picker.show());
 		if (typeof picker.open === "function") return new Promise((resolve, reject) => {
 			try {
 				picker.open({ done: resolve });
-				return;
 			} catch {
 				try {
 					picker.open(resolve);
-					return;
 				} catch (functionCallbackError) {
-					if (typeof picker.show !== "function") {
-						reject(functionCallbackError);
-						return;
-					}
+					reject(functionCallbackError);
 				}
 			}
-			Promise.resolve().then(() => picker.show()).then(resolve, reject);
 		});
-		if (typeof picker.show === "function") return Promise.resolve().then(() => picker.show());
 		return Promise.reject(/* @__PURE__ */ new TypeError("The file picker instance must implement either open() or show()."));
 	}
 	//#endregion
@@ -1136,7 +1130,7 @@
 			}
 			for (const timeoutId of state.timeoutIds) window.clearTimeout(timeoutId);
 			state.timeoutIds.clear();
-			if (state.restoreGuardTimeoutId) window.clearTimeout(state.restoreGuardTimeoutId);
+			if (state.restoreGuardTimeoutId !== null) window.clearTimeout(state.restoreGuardTimeoutId);
 			tab.removeEventListener("SSTabRestored", state.onRestored);
 			tab.removeEventListener("TabClose", state.cleanup);
 			delete tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY];
@@ -1147,11 +1141,6 @@
 			const applyPlacement = () => {
 				if (!tab.isConnected || tab.closing) return false;
 				return placePinnedTab(tab, placement);
-			};
-			const state = {
-				restored: false,
-				restoreGuardTimeoutId: 0,
-				timeoutIds: /* @__PURE__ */ new Set()
 			};
 			const cleanup = () => {
 				clearPinnedDuplicateRepositionState(tab);
@@ -1166,10 +1155,13 @@
 				applyPlacement();
 				maybeCleanup();
 			};
-			Object.assign(state, {
+			const state = {
 				cleanup,
-				onRestored
-			});
+				onRestored,
+				restored: false,
+				restoreGuardTimeoutId: null,
+				timeoutIds: /* @__PURE__ */ new Set()
+			};
 			tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = state;
 			tab.addEventListener("SSTabRestored", onRestored, { once: true });
 			tab.addEventListener("TabClose", cleanup, { once: true });
