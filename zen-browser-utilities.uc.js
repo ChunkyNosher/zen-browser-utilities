@@ -267,11 +267,11 @@
 		if (typeof picker.open === "function") return new Promise((resolve, reject) => {
 			try {
 				picker.open({ done: resolve });
-			} catch {
+			} catch (doneCallbackError) {
 				try {
 					picker.open(resolve);
 				} catch (functionCallbackError) {
-					reject(functionCallbackError);
+					reject(functionCallbackError ?? doneCallbackError);
 				}
 			}
 		});
@@ -1162,9 +1162,9 @@
 				restoreGuardTimeoutId: null,
 				timeoutIds: /* @__PURE__ */ new Set()
 			};
-			tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = state;
 			tab.addEventListener("SSTabRestored", onRestored, { once: true });
 			tab.addEventListener("TabClose", cleanup, { once: true });
+			tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] = state;
 			state.restoreGuardTimeoutId = window.setTimeout(() => {
 				if (tab[PINNED_DUPLICATE_REPOSITION_STATE_KEY] !== state) return;
 				state.restored = true;
