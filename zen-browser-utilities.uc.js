@@ -262,7 +262,7 @@
 	* @returns {Promise<number>}
 	*/
 	function openFilePicker(picker) {
-		if (!picker) return Promise.reject(/* @__PURE__ */ new TypeError("A file picker instance is required."));
+		if (!picker) return Promise.reject(/* @__PURE__ */ new TypeError("picker parameter cannot be null or undefined."));
 		if (typeof picker.show === "function") return Promise.resolve().then(() => picker.show());
 		if (typeof picker.open === "function") return new Promise((resolve, reject) => {
 			try {
@@ -271,7 +271,7 @@
 				try {
 					picker.open(resolve);
 				} catch (functionCallbackError) {
-					reject(functionCallbackError ?? doneCallbackError);
+					reject(new AggregateError([doneCallbackError, functionCallbackError], "Failed to open the file picker."));
 				}
 			}
 		});
@@ -1142,6 +1142,7 @@
 				if (!tab.isConnected || tab.closing) return false;
 				return placePinnedTab(tab, placement);
 			};
+			let state = null;
 			const cleanup = () => {
 				clearPinnedDuplicateRepositionState(tab);
 			};
@@ -1155,7 +1156,7 @@
 				applyPlacement();
 				maybeCleanup();
 			};
-			const state = {
+			state = {
 				cleanup,
 				onRestored,
 				restored: false,
