@@ -1147,6 +1147,7 @@ import {
 
       return placePinnedTab(tab, placement);
     };
+    let state = null;
     const cleanup = () => {
       clearPinnedDuplicateRepositionState(tab);
     };
@@ -1170,7 +1171,7 @@ import {
       applyPlacement();
       maybeCleanup();
     };
-    const state = {
+    state = {
       cleanup,
       onRestored,
       restored: false,

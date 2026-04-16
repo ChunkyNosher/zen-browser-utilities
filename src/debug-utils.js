@@ -54,7 +54,7 @@ export function createDebugSnapshot({
  */
 export function openFilePicker(picker) {
   if (!picker) {
-    return Promise.reject(new TypeError('A file picker instance is required.'));
+    return Promise.reject(new TypeError('picker parameter cannot be null or undefined.'));
   }
 
   if (typeof picker.show === 'function') {
@@ -69,7 +69,12 @@ export function openFilePicker(picker) {
         try {
           picker.open(resolve);
         } catch (functionCallbackError) {
-          reject(functionCallbackError ?? doneCallbackError);
+          reject(
+            new AggregateError(
+              [doneCallbackError, functionCallbackError],
+              'Failed to open the file picker.'
+            )
+          );
         }
       }
     });
